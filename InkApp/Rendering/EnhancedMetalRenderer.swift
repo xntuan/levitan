@@ -208,6 +208,12 @@ class EnhancedMetalRenderer: NSObject {
 
         commandBuffer.commit()
     }
+
+    /// Export composited artwork
+    func compositeLayersForExport() -> MTLTexture? {
+        // Use the same compositing logic as display
+        return compositeLayersForDisplay()
+    }
 }
 
 // MARK: - MTKViewDelegate

@@ -37,10 +37,15 @@ class EnhancedCanvasViewController: UIViewController {
     private var layerSelectorView: LayerSelectorView!
     private var brushPaletteView: UIView!
     private var advancedSettingsButton: UIButton!
+    private var completeButton: UIButton!
 
     // Auto-hide
     private var autoHideTimer: Timer?
     private var isUIVisible = true
+
+    // Completion tracking
+    private var artworkStartTime: Date?
+    private var currentTemplate: Template?
 
     // MARK: - Lifecycle
 
@@ -50,6 +55,9 @@ class EnhancedCanvasViewController: UIViewController {
         setupMetalView()
         setupGestures()
         setupTestEnvironment()
+
+        // Start tracking artwork time
+        artworkStartTime = Date()
     }
 
     // MARK: - Setup
@@ -126,6 +134,7 @@ class EnhancedCanvasViewController: UIViewController {
         addLayerSelector()
         addBrushPalette()
         addUndoRedoButtons()
+        addCompleteButton()
 
         // Start auto-hide timer
         scheduleAutoHide()
@@ -449,6 +458,47 @@ class EnhancedCanvasViewController: UIViewController {
         print("⏭️ Redo (\(undoManager.redoCount()) remaining)")
     }
 
+    private func addCompleteButton() {
+        completeButton = UIButton(type: .system)
+        completeButton.setTitle("✓ Complete", for: .normal)
+        completeButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 16, weight: .semibold)
+        completeButton.setTitleColor(.white, for: .normal)
+        completeButton.backgroundColor = DesignTokens.Colors.inkPrimary
+        completeButton.layer.cornerRadius = 22
+        completeButton.layer.shadowColor = UIColor.black.cgColor
+        completeButton.layer.shadowOpacity = 0.2
+        completeButton.layer.shadowOffset = CGSize(width: 0, height: 8)
+        completeButton.layer.shadowRadius = 16
+        completeButton.addTarget(self, action: #selector(completeButtonTapped), for: .touchUpInside)
+        view.addSubview(completeButton)
+
+        completeButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            completeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            completeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            completeButton.widthAnchor.constraint(equalToConstant: 120),
+            completeButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
+    @objc private func completeButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.impactOccurred()
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.completeButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.completeButton.transform = .identity
+            }
+        }
+
+        // Export artwork and show completion screen
+        showCompletionScreen()
+    }
+
     // MARK: - Error Handling
 
     private func showAlert(_ message: String, title: String = "Notice") {
@@ -459,6 +509,99 @@ class EnhancedCanvasViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    // MARK: - Template Loading
+
+    func loadTemplate(_ template: Template) {
+        currentTemplate = template
+        artworkStartTime = Date()
+        print("📋 Loaded template: '\(template.name)'")
+    }
+
+    // MARK: - Completion & Export
+
+    private func showCompletionScreen() {
+        // Export current artwork
+        guard let completedImage = exportArtwork() else {
+            showAlert("Failed to export artwork", title: "Error")
+            return
+        }
+
+        // Calculate completion time
+        let completionTime: TimeInterval
+        if let startTime = artworkStartTime {
+            completionTime = Date().timeIntervalSince(startTime)
+        } else {
+            completionTime = 0
+        }
+
+        // Get artwork name
+        let artworkName = currentTemplate?.name ?? "Untitled Artwork"
+
+        // Create and present completion screen
+        let completionVC = CompletionViewController(
+            completedImage: completedImage,
+            artworkName: artworkName,
+            completionTime: completionTime
+        )
+        completionVC.delegate = self
+
+        present(completionVC, animated: true) {
+            print("🎉 Showing completion screen")
+        }
+    }
+
+    private func exportArtwork() -> UIImage? {
+        // Get composited texture from renderer
+        guard let compositedTexture = renderer.compositeLayersForExport() else {
+            print("❌ Failed to composite layers for export")
+            return nil
+        }
+
+        // Convert Metal texture to UIImage
+        let image = textureToImage(texture: compositedTexture)
+        print("✅ Exported artwork: \(compositedTexture.width)×\(compositedTexture.height)")
+        return image
+    }
+
+    private func textureToImage(texture: MTLTexture) -> UIImage? {
+        // Get texture dimensions
+        let width = texture.width
+        let height = texture.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let bitsPerComponent = 8
+
+        // Allocate buffer for pixel data
+        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+        // Copy texture data to buffer
+        let region = MTLRegionMake2D(0, 0, width, height)
+        texture.getBytes(&pixelData, bytesPerRow: bytesPerRow, from: region, mipmapLevel: 0)
+
+        // Create CGImage from pixel data
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+
+        guard let dataProvider = CGDataProvider(data: Data(pixelData) as CFData),
+              let cgImage = CGImage(
+                  width: width,
+                  height: height,
+                  bitsPerComponent: bitsPerComponent,
+                  bitsPerPixel: bytesPerPixel * bitsPerComponent,
+                  bytesPerRow: bytesPerRow,
+                  space: colorSpace,
+                  bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
+                  provider: dataProvider,
+                  decode: nil,
+                  shouldInterpolate: false,
+                  intent: .defaultIntent
+              ) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage)
     }
 
     // MARK: - Layer Selector
@@ -680,6 +823,7 @@ class EnhancedCanvasViewController: UIViewController {
             self.layerSelectorView?.alpha = 0
             self.brushPaletteView?.alpha = 0
             self.advancedSettingsButton?.alpha = 0
+            self.completeButton?.alpha = 0
         }
 
         isUIVisible = false
@@ -696,6 +840,7 @@ class EnhancedCanvasViewController: UIViewController {
             self.layerSelectorView?.alpha = 1
             self.brushPaletteView?.alpha = 1
             self.advancedSettingsButton?.alpha = 1
+            self.completeButton?.alpha = 1
         }
 
         isUIVisible = true
@@ -886,5 +1031,20 @@ extension EnhancedCanvasViewController: AdvancedBrushSettingsPanelDelegate {
 
     func advancedBrushSettingsPanelDidCancel(_ panel: AdvancedBrushSettingsPanel) {
         print("❌ Advanced brush settings cancelled")
+    }
+}
+
+// MARK: - CompletionViewControllerDelegate
+
+extension EnhancedCanvasViewController: CompletionViewControllerDelegate {
+    func completionViewControllerDidSelectNextArtwork(_ controller: CompletionViewController) {
+        print("→ User wants next artwork, navigating back to gallery")
+        // Navigate back to template gallery
+        navigationController?.popViewController(animated: true)
+    }
+
+    func completionViewControllerDidRequestShare(_ controller: CompletionViewController, image: UIImage) {
+        print("📤 User shared artwork")
+        // Analytics tracking could go here
     }
 }
