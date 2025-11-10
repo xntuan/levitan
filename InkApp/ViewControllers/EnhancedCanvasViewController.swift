@@ -50,6 +50,8 @@ class EnhancedCanvasViewController: UIViewController {
     // Completion tracking
     private var artworkStartTime: Date?
     private var currentTemplate: Template?
+    private var artworkProgress: ArtworkProgress?
+    private var progressLabel: UILabel?
 
     // MARK: - Lifecycle
 

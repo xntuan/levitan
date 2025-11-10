@@ -168,7 +168,47 @@ struct Template: Codable, Identifiable {
         guard let maskImageName = layerDef.maskImageName else {
             return nil
         }
-        return UIImage(named: maskImageName)
+
+        // Try to load from asset catalog first
+        if let image = UIImage(named: maskImageName) {
+            return image
+        }
+
+        // Fallback: Generate mask programmatically
+        print("  ⚠️ Mask image '\(maskImageName)' not found, generating programmatically")
+        return generateMaskForLayer(layerDef)
+    }
+
+    /// Generate mask programmatically if asset doesn't exist
+    private func generateMaskForLayer(_ layerDef: LayerDefinition) -> UIImage? {
+        let size = CGSize(width: 2048, height: 2048)
+
+        // Infer region from layer order and name
+        let totalLayers = layerDefinitions.count
+        let region: MaskGenerator.Region
+
+        let lowercaseName = layerDef.name.lowercased()
+
+        if lowercaseName.contains("sky") || lowercaseName.contains("background") {
+            region = .top
+        } else if lowercaseName.contains("mountain") || lowercaseName.contains("tree") || lowercaseName.contains("clouds") || lowercaseName.contains("middle") {
+            region = .middle
+        } else if lowercaseName.contains("foreground") || lowercaseName.contains("shore") || lowercaseName.contains("path") || lowercaseName.contains("water") {
+            region = .bottom
+        } else {
+            // Fallback to order-based division
+            if totalLayers == 2 {
+                region = layerDef.order == 0 ? .top : .bottom
+            } else if totalLayers == 3 {
+                region = layerDef.order == 0 ? .top : (layerDef.order == 1 ? .middle : .bottom)
+            } else {
+                let fraction = CGFloat(layerDef.order) / CGFloat(totalLayers)
+                let height = 1.0 / CGFloat(totalLayers)
+                region = .custom(fraction, fraction + height)
+            }
+        }
+
+        return MaskGenerator.generateGradientMask(size: size, region: region, feather: 100)
     }
 
     /// Get display string for duration
