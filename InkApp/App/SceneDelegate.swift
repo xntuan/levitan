@@ -20,9 +20,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window = UIWindow(windowScene: windowScene)
 
         // Set root view controller
-        // Use EnhancedCanvasViewController for full drawing functionality
-        let canvasViewController = EnhancedCanvasViewController()
-        window?.rootViewController = canvasViewController
+        // Launch with template gallery for Lake-like experience
+        let templateGallery = TemplateGalleryViewController()
+        let navigationController = UINavigationController(rootViewController: templateGallery)
+
+        // Configure navigation bar appearance
+        navigationController.navigationBar.prefersLargeTitles = false
+
+        window?.rootViewController = navigationController
         window?.makeKeyAndVisible()
     }
 

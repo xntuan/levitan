@@ -393,17 +393,86 @@ extension EnhancedCanvasViewController {
     func loadTemplate(_ template: Template) {
         print("📄 Loading template: \(template.name)")
 
-        // TODO: Implement template loading
-        // 1. Load base image
-        // 2. Create layers from template.layerDefinitions
-        // 3. Load mask textures for each layer
-        // 4. Set suggested patterns for each layer
-        // 5. Update UI
+        // Store current template
+        currentTemplate = template
 
-        // For now, just log
-        print("  - Layers: \(template.layerDefinitions.count)")
-        for layerDef in template.layerDefinitions {
-            print("    • \(layerDef.name) - \(layerDef.suggestedPattern?.rawValue ?? "none")")
+        // 1. Clear existing layers
+        layerManager.layers.removeAll()
+        layerManager.activeLayerIndex = 0
+        renderer.clearAllLayers()
+
+        // 2. Load base image (optional - can be used as background reference)
+        if let baseImage = template.loadBaseImage() {
+            print("  ✅ Loaded base image: \(template.baseImageName)")
+            // TODO: Optionally display as background guide layer
         }
+
+        // 3. Create layers from template definitions
+        print("  📑 Creating \(template.layerDefinitions.count) layers:")
+
+        for layerDef in template.layerDefinitions.sorted(by: { $0.order < $1.order }) {
+            // Create layer
+            let layer = Layer(name: layerDef.name, opacity: 1.0)
+            layerManager.addLayer(layer)
+
+            // Load mask image if available
+            let maskImage = template.loadMaskImage(for: layerDef)
+
+            // Add layer to renderer with mask
+            renderer.addLayer(layer, maskImage: maskImage)
+
+            print("    • \(layerDef.name) (order: \(layerDef.order))")
+            if let pattern = layerDef.suggestedPattern {
+                print("      Suggested: \(pattern.rawValue)")
+            }
+        }
+
+        // 4. Select first layer
+        if !layerManager.layers.isEmpty {
+            layerManager.selectLayer(at: 0)
+
+            // Apply suggested pattern for first layer if available
+            if let firstLayerDef = template.layerDefinitions.first,
+               let suggestedPattern = firstLayerDef.suggestedPattern {
+                applyPatternToBrush(suggestedPattern)
+                print("  🎨 Applied suggested pattern: \(suggestedPattern.rawValue)")
+            }
+        }
+
+        // 5. Update UI
+        updateLayerSelectorView()
+        print("✅ Template loaded successfully")
+    }
+
+    /// Apply a pattern type to the current brush
+    private func applyPatternToBrush(_ patternType: PatternBrush.PatternType) {
+        brushEngine.config.patternBrush.type = patternType
+
+        // Set pattern-specific defaults
+        switch patternType {
+        case .parallelLines:
+            brushEngine.config.patternBrush.rotation = 45
+            brushEngine.config.patternBrush.spacing = 10
+        case .crossHatch:
+            brushEngine.config.patternBrush.rotation = 45
+            brushEngine.config.patternBrush.spacing = 12
+        case .dots:
+            brushEngine.config.patternBrush.rotation = 0
+            brushEngine.config.patternBrush.spacing = 15
+        case .contourLines:
+            brushEngine.config.patternBrush.rotation = 0
+            brushEngine.config.patternBrush.spacing = 8
+        case .waves:
+            brushEngine.config.patternBrush.rotation = 0
+            brushEngine.config.patternBrush.spacing = 12
+        }
+    }
+
+    /// Update layer selector view to reflect new layers
+    private func updateLayerSelectorView() {
+        if let layerSelector = layerSelectorView {
+            layerSelector.removeFromSuperview()
+        }
+        addLayerSelector()
     }
 }

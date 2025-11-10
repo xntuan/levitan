@@ -23,6 +23,7 @@ class EnhancedMetalRenderer: NSObject {
     // Textures
     var canvasTexture: MTLTexture?
     var layerTextures: [UUID: MTLTexture] = [:]
+    var layerMaskTextures: [UUID: MTLTexture] = [:]  // Mask textures for layer regions
 
     // Display pipeline
     var displayPipelineState: MTLRenderPipelineState?
@@ -187,9 +188,38 @@ class EnhancedMetalRenderer: NSObject {
         }
     }
 
+    /// Add layer with mask texture
+    func addLayer(_ layer: Layer, maskImage: UIImage?) {
+        // Create content texture
+        if let texture = textureManager?.createBlankTexture(size: canvasSize) {
+            layerTextures[layer.id] = texture
+
+            // Clear to transparent
+            guard let commandBuffer = commandQueue.makeCommandBuffer() else {
+                return
+            }
+
+            textureManager?.clearTexture(
+                texture,
+                to: MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0),
+                commandBuffer: commandBuffer
+            )
+
+            commandBuffer.commit()
+        }
+
+        // Create mask texture if provided
+        if let maskImage = maskImage,
+           let maskTexture = textureManager?.createMaskTexture(from: maskImage) {
+            layerMaskTextures[layer.id] = maskTexture
+            print("  ✅ Loaded mask texture for layer: \(layer.name)")
+        }
+    }
+
     /// Remove layer
     func removeLayer(_ layerId: UUID) {
         layerTextures.removeValue(forKey: layerId)
+        layerMaskTextures.removeValue(forKey: layerId)
     }
 
     /// Clear active layer
@@ -209,10 +239,51 @@ class EnhancedMetalRenderer: NSObject {
         commandBuffer.commit()
     }
 
+    /// Clear all layers (for template loading)
+    func clearAllLayers() {
+        layerTextures.removeAll()
+        layerMaskTextures.removeAll()
+    }
+
     /// Export composited artwork
     func compositeLayersForExport() -> MTLTexture? {
         // Use the same compositing logic as display
         return compositeLayersForDisplay()
+    }
+
+    // MARK: - Helper Methods
+
+    /// Create a white mask texture (fully opaque)
+    private var cachedWhiteMask: MTLTexture?
+    private func createWhiteMaskTexture() -> MTLTexture? {
+        // Cache the white mask texture since it's used frequently
+        if let cached = cachedWhiteMask {
+            return cached
+        }
+
+        // Create small 16x16 white texture (will be sampled/stretched)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r8Unorm,
+            width: 16,
+            height: 16,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            return nil
+        }
+
+        // Fill with white (255)
+        let pixelData = [UInt8](repeating: 255, count: 16 * 16)
+        let region = MTLRegion(
+            origin: MTLOrigin(x: 0, y: 0, z: 0),
+            size: MTLSize(width: 16, height: 16, depth: 1)
+        )
+        texture.replace(region: region, mipmapLevel: 0, withBytes: pixelData, bytesPerRow: 16)
+
+        cachedWhiteMask = texture
+        return texture
     }
 }
 
@@ -404,6 +475,16 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
             renderEncoder.setRenderPipelineState(compositePipelineState)
             renderEncoder.setFragmentTexture(currentBase, index: 0)  // Base texture
             renderEncoder.setFragmentTexture(layerTexture, index: 1) // Layer texture
+
+            // Set mask texture (or white texture if no mask)
+            if let maskTexture = layerMaskTextures[layer.id] {
+                renderEncoder.setFragmentTexture(maskTexture, index: 2)
+            } else {
+                // No mask - create white texture (fully opaque)
+                if let whiteMask = createWhiteMaskTexture() {
+                    renderEncoder.setFragmentTexture(whiteMask, index: 2)
+                }
+            }
 
             // Create composite params buffer
             struct CompositeParams {
