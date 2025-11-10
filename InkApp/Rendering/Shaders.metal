@@ -120,6 +120,111 @@ fragment float4 composite_fragment(
     return result;
 }
 
+// MARK: - Blend Mode Functions
+
+// Multiply blend mode
+float3 blendMultiply(float3 base, float3 blend) {
+    return base * blend;
+}
+
+// Screen blend mode
+float3 blendScreen(float3 base, float3 blend) {
+    return 1.0 - (1.0 - base) * (1.0 - blend);
+}
+
+// Overlay blend mode
+float3 blendOverlay(float3 base, float3 blend) {
+    float3 result;
+    for (int i = 0; i < 3; i++) {
+        if (base[i] < 0.5) {
+            result[i] = 2.0 * base[i] * blend[i];
+        } else {
+            result[i] = 1.0 - 2.0 * (1.0 - base[i]) * (1.0 - blend[i]);
+        }
+    }
+    return result;
+}
+
+// Add blend mode (linear dodge)
+float3 blendAdd(float3 base, float3 blend) {
+    return min(base + blend, float3(1.0));
+}
+
+// Darken blend mode
+float3 blendDarken(float3 base, float3 blend) {
+    return min(base, blend);
+}
+
+// Lighten blend mode
+float3 blendLighten(float3 base, float3 blend) {
+    return max(base, blend);
+}
+
+// MARK: - Advanced Layer Compositing Shader
+
+struct CompositeParams {
+    float opacity;
+    int blendMode; // 0=normal, 1=multiply, 2=screen, 3=overlay, 4=add, 5=darken, 6=lighten
+};
+
+// Advanced layer compositing with blend modes
+fragment float4 layer_composite_fragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> baseTexture [[texture(0)]],
+    texture2d<float> layerTexture [[texture(1)]],
+    constant CompositeParams &params [[buffer(0)]]
+) {
+    constexpr sampler textureSampler(
+        mag_filter::linear,
+        min_filter::linear,
+        address::clamp_to_edge
+    );
+
+    float4 baseColor = baseTexture.sample(textureSampler, in.texCoord);
+    float4 layerColor = layerTexture.sample(textureSampler, in.texCoord);
+
+    // Early exit if layer is fully transparent
+    if (layerColor.a == 0.0) {
+        return baseColor;
+    }
+
+    // Apply blend mode
+    float3 blendedColor;
+    switch (params.blendMode) {
+        case 1: // Multiply
+            blendedColor = blendMultiply(baseColor.rgb, layerColor.rgb);
+            break;
+        case 2: // Screen
+            blendedColor = blendScreen(baseColor.rgb, layerColor.rgb);
+            break;
+        case 3: // Overlay
+            blendedColor = blendOverlay(baseColor.rgb, layerColor.rgb);
+            break;
+        case 4: // Add
+            blendedColor = blendAdd(baseColor.rgb, layerColor.rgb);
+            break;
+        case 5: // Darken
+            blendedColor = blendDarken(baseColor.rgb, layerColor.rgb);
+            break;
+        case 6: // Lighten
+            blendedColor = blendLighten(baseColor.rgb, layerColor.rgb);
+            break;
+        default: // Normal
+            blendedColor = layerColor.rgb;
+            break;
+    }
+
+    // Apply layer opacity and alpha
+    float alpha = layerColor.a * params.opacity;
+
+    // Final blend with base
+    float4 result;
+    result.rgb = mix(baseColor.rgb, blendedColor, alpha);
+    result.a = max(baseColor.a, alpha);
+
+    return result;
+}
+
 // MARK: - Texture Display Shader
 
 // Simple texture display for rendering composited canvas to screen

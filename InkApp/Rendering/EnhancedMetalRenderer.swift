@@ -26,6 +26,7 @@ class EnhancedMetalRenderer: NSObject {
 
     // Display pipeline
     var displayPipelineState: MTLRenderPipelineState?
+    var compositePipelineState: MTLRenderPipelineState?
 
     // Canvas state
     var canvasSize: CGSize = CGSize(width: 2048, height: 2048)
@@ -64,6 +65,7 @@ class EnhancedMetalRenderer: NSObject {
 
         // Setup display pipeline
         setupDisplayPipeline()
+        setupCompositePipeline()
 
         metalView.delegate = self
     }
@@ -161,55 +163,6 @@ class EnhancedMetalRenderer: NSObject {
         }
 
         commandBuffer.commit()
-    }
-
-    /// Composite all layers for display
-    private func compositeLayersToCanvas() -> MTLTexture? {
-        guard let outputTexture = textureManager?.createBlankTexture(size: canvasSize),
-              let commandBuffer = commandQueue.makeCommandBuffer() else {
-            return nil
-        }
-
-        // Start with white background
-        textureManager?.clearTexture(
-            outputTexture,
-            to: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1),
-            commandBuffer: commandBuffer
-        )
-
-        // Composite each visible layer
-        for layer in layerManager.layers {
-            guard layer.isVisible,
-                  let layerTexture = layerTextures[layer.id] else {
-                continue
-            }
-
-            // TODO: Apply layer opacity and blend mode
-            // For now, just copy the layer
-            if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
-                let origin = MTLOrigin(x: 0, y: 0, z: 0)
-                let size = MTLSize(width: Int(canvasSize.width), height: Int(canvasSize.height), depth: 1)
-
-                blitEncoder.copy(
-                    from: layerTexture,
-                    sourceSlice: 0,
-                    sourceLevel: 0,
-                    sourceOrigin: origin,
-                    sourceSize: size,
-                    to: outputTexture,
-                    destinationSlice: 0,
-                    destinationLevel: 0,
-                    destinationOrigin: origin
-                )
-
-                blitEncoder.endEncoding()
-            }
-        }
-
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-
-        return outputTexture
     }
 
     // MARK: - Layer Management
@@ -311,6 +264,39 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
         }
     }
 
+    private func setupCompositePipeline() {
+        guard let library = device.makeDefaultLibrary() else {
+            print("ERROR: Could not load default library for composite pipeline")
+            return
+        }
+
+        let vertexFunction = library.makeFunction(name: "composite_vertex")
+        let fragmentFunction = library.makeFunction(name: "layer_composite_fragment")
+
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = vertexFunction
+        pipelineDescriptor.fragmentFunction = fragmentFunction
+        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+
+        // Enable blending for layer compositing
+        let colorAttachment = pipelineDescriptor.colorAttachments[0]!
+        colorAttachment.isBlendingEnabled = true
+        colorAttachment.rgbBlendOperation = .add
+        colorAttachment.alphaBlendOperation = .add
+        colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+        colorAttachment.sourceAlphaBlendFactor = .sourceAlpha
+        colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+
+        do {
+            compositePipelineState = try device.makeRenderPipelineState(
+                descriptor: pipelineDescriptor
+            )
+        } catch {
+            print("ERROR: Failed to create composite pipeline: \(error)")
+        }
+    }
+
     private func renderTextureToScreen(_ texture: MTLTexture?, view: MTKView, commandBuffer: MTLCommandBuffer) {
         guard let texture = texture,
               let renderPassDescriptor = view.currentRenderPassDescriptor,
@@ -338,15 +324,106 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
     }
 
     private func compositeLayersForDisplay() -> MTLTexture? {
-        // For now, just return the first visible layer
-        // TODO: Properly composite all layers with blend modes
-        for layer in layerManager.layers {
-            if layer.isVisible, let texture = layerTextures[layer.id] {
-                return texture
-            }
+        guard let compositePipelineState = compositePipelineState,
+              let commandBuffer = commandQueue.makeCommandBuffer() else {
+            return canvasTexture
         }
 
-        // If no visible layers, return white canvas
-        return canvasTexture
+        // Create output texture
+        guard let outputTexture = textureManager?.createBlankTexture(size: canvasSize) else {
+            return canvasTexture
+        }
+
+        // Start with white background
+        textureManager?.clearTexture(
+            outputTexture,
+            to: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1),
+            commandBuffer: commandBuffer
+        )
+
+        // Get visible layers sorted by z-order (bottom to top)
+        let visibleLayers = layerManager.layers.filter { $0.isVisible }
+
+        guard !visibleLayers.isEmpty else {
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            return outputTexture
+        }
+
+        // Create intermediate textures for ping-pong compositing
+        guard let tempTexture1 = textureManager?.createBlankTexture(size: canvasSize),
+              let tempTexture2 = textureManager?.createBlankTexture(size: canvasSize) else {
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            return outputTexture
+        }
+
+        // Copy white background to temp1
+        if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
+            let origin = MTLOrigin(x: 0, y: 0, z: 0)
+            let size = MTLSize(width: Int(canvasSize.width), height: Int(canvasSize.height), depth: 1)
+            blitEncoder.copy(
+                from: outputTexture,
+                sourceSlice: 0,
+                sourceLevel: 0,
+                sourceOrigin: origin,
+                sourceSize: size,
+                to: tempTexture1,
+                destinationSlice: 0,
+                destinationLevel: 0,
+                destinationOrigin: origin
+            )
+            blitEncoder.endEncoding()
+        }
+
+        var currentBase = tempTexture1
+        var currentOutput = tempTexture2
+
+        // Composite each visible layer
+        for (index, layer) in visibleLayers.enumerated() {
+            guard let layerTexture = layerTextures[layer.id] else {
+                continue
+            }
+
+            // Setup render pass to composite this layer onto current base
+            let renderPassDescriptor = MTLRenderPassDescriptor()
+            renderPassDescriptor.colorAttachments[0].texture = currentOutput
+            renderPassDescriptor.colorAttachments[0].loadAction = .dontCare
+            renderPassDescriptor.colorAttachments[0].storeAction = .store
+
+            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+                continue
+            }
+
+            renderEncoder.setRenderPipelineState(compositePipelineState)
+            renderEncoder.setFragmentTexture(currentBase, index: 0)  // Base texture
+            renderEncoder.setFragmentTexture(layerTexture, index: 1) // Layer texture
+
+            // Create composite params buffer
+            struct CompositeParams {
+                var opacity: Float
+                var blendMode: Int32
+            }
+
+            var params = CompositeParams(
+                opacity: layer.opacity,
+                blendMode: Int32(layer.blendMode.shaderValue)
+            )
+
+            renderEncoder.setFragmentBytes(&params, length: MemoryLayout<CompositeParams>.stride, index: 0)
+
+            // Draw full-screen quad
+            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+            renderEncoder.endEncoding()
+
+            // Swap buffers for next layer (ping-pong)
+            swap(&currentBase, &currentOutput)
+        }
+
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        // The final result is in currentBase (after last swap)
+        return currentBase
     }
 }
