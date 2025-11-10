@@ -38,6 +38,7 @@ class EnhancedCanvasViewController: UIViewController {
     private var brushPaletteView: UIView!
     private var advancedSettingsButton: UIButton!
     private var completeButton: UIButton!
+    private var libraryButton: UIButton!
 
     // Auto-hide
     private var autoHideTimer: Timer?
@@ -135,6 +136,7 @@ class EnhancedCanvasViewController: UIViewController {
         addBrushPalette()
         addUndoRedoButtons()
         addCompleteButton()
+        addLibraryButton()
 
         // Start auto-hide timer
         scheduleAutoHide()
@@ -490,6 +492,29 @@ class EnhancedCanvasViewController: UIViewController {
         ])
     }
 
+    private func addLibraryButton() {
+        libraryButton = UIButton(type: .system)
+        libraryButton.setTitle("📚", for: .normal)
+        libraryButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 24, weight: .medium)
+        libraryButton.backgroundColor = DesignTokens.Colors.surface
+        libraryButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        libraryButton.layer.cornerRadius = 22
+        libraryButton.layer.shadowColor = UIColor.black.cgColor
+        libraryButton.layer.shadowOpacity = 0.2
+        libraryButton.layer.shadowOffset = CGSize(width: 0, height: 8)
+        libraryButton.layer.shadowRadius = 16
+        libraryButton.addTarget(self, action: #selector(libraryButtonTapped), for: .touchUpInside)
+        view.addSubview(libraryButton)
+
+        libraryButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            libraryButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            libraryButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            libraryButton.widthAnchor.constraint(equalToConstant: 60),
+            libraryButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
     @objc private func completeButtonTapped() {
         // Haptic feedback
         let impact = UIImpactFeedbackGenerator(style: .heavy)
@@ -813,6 +838,29 @@ class EnhancedCanvasViewController: UIViewController {
         print("⚙️ Opening advanced brush settings")
     }
 
+    @objc private func libraryButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show brush library
+        let library = BrushLibraryView()
+        library.delegate = self
+        library.configure(with: brushEngine.config)
+        library.present(in: view)
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.libraryButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.libraryButton.transform = .identity
+            }
+        }
+
+        print("📚 Opening brush library")
+    }
+
     // MARK: - Auto-Hide Behavior
 
     private func scheduleAutoHide() {
@@ -833,6 +881,7 @@ class EnhancedCanvasViewController: UIViewController {
             self.brushPaletteView?.alpha = 0
             self.advancedSettingsButton?.alpha = 0
             self.completeButton?.alpha = 0
+            self.libraryButton?.alpha = 0
         }
 
         isUIVisible = false
@@ -850,6 +899,7 @@ class EnhancedCanvasViewController: UIViewController {
             self.brushPaletteView?.alpha = 1
             self.advancedSettingsButton?.alpha = 1
             self.completeButton?.alpha = 1
+            self.libraryButton?.alpha = 1
         }
 
         isUIVisible = true
@@ -1108,5 +1158,71 @@ extension EnhancedCanvasViewController: CompletionViewControllerDelegate {
     func completionViewControllerDidRequestShare(_ controller: CompletionViewController, image: UIImage) {
         print("📤 User shared artwork")
         // Analytics tracking could go here
+    }
+}
+
+// MARK: - BrushLibraryViewDelegate
+
+extension EnhancedCanvasViewController: BrushLibraryViewDelegate {
+    func brushLibrary(_ library: BrushLibraryView, didSelectPreset preset: BrushPreset) {
+        // Apply preset to brush engine
+        brushEngine.config = preset.configuration
+
+        // Update debug info
+        updateDebugInfo()
+
+        // Dismiss library
+        library.dismiss()
+
+        print("🖌️ Applied preset: '\(preset.name)'")
+    }
+
+    func brushLibraryDidRequestSavePreset(_ library: BrushLibraryView, currentConfiguration: BrushConfiguration) {
+        // Show save dialog
+        let alert = UIAlertController(
+            title: "Save Brush Preset",
+            message: "Enter a name for this preset",
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { textField in
+            textField.placeholder = "Preset name"
+            textField.autocapitalizationType = .words
+        }
+
+        alert.addTextField { textField in
+            textField.placeholder = "Icon (emoji)"
+            textField.text = "🖌️"
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self, weak library] _ in
+            guard let name = alert.textFields?[0].text, !name.isEmpty,
+                  let icon = alert.textFields?[1].text, !icon.isEmpty else {
+                return
+            }
+
+            // Save preset
+            BrushPresetsLibrary.shared.saveCustomPreset(
+                name: name,
+                icon: icon,
+                configuration: currentConfiguration
+            )
+
+            // Refresh library
+            library?.configure(with: currentConfiguration)
+
+            // Show confirmation
+            self?.showAlert("Preset '\(name)' saved successfully!", title: "Saved")
+
+            print("💾 Saved custom preset: '\(name)'")
+        })
+
+        present(alert, animated: true)
+    }
+
+    func brushLibraryDidCancel(_ library: BrushLibraryView) {
+        library.dismiss()
+        print("❌ Brush library closed")
     }
 }
