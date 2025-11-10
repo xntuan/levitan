@@ -36,6 +36,7 @@ class EnhancedCanvasViewController: UIViewController {
     private var debugLabel: UILabel?
     private var layerSelectorView: LayerSelectorView!
     private var brushPaletteView: UIView!
+    private var advancedSettingsButton: UIButton!
 
     // Auto-hide
     private var autoHideTimer: Timer?
@@ -552,6 +553,42 @@ class EnhancedCanvasViewController: UIViewController {
             brushButtons.append(button)
             stackView.addArrangedSubview(button)
         }
+
+        // Add advanced settings button
+        advancedSettingsButton = UIButton(type: .system)
+        advancedSettingsButton.setTitle("⚙️", for: .normal)
+        advancedSettingsButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 24, weight: .medium)
+        advancedSettingsButton.backgroundColor = DesignTokens.Colors.surface
+        advancedSettingsButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        advancedSettingsButton.layer.cornerRadius = 26
+        advancedSettingsButton.layer.masksToBounds = false
+
+        // Add blur effect
+        let settingsBlur = UIBlurEffect(style: .systemUltraThinMaterialLight)
+        let settingsBlurView = UIVisualEffectView(effect: settingsBlur)
+        settingsBlurView.frame = advancedSettingsButton.bounds
+        settingsBlurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        settingsBlurView.layer.cornerRadius = 26
+        settingsBlurView.clipsToBounds = true
+        settingsBlurView.isUserInteractionEnabled = false
+        advancedSettingsButton.insertSubview(settingsBlurView, at: 0)
+
+        // Shadow
+        advancedSettingsButton.layer.shadowColor = UIColor.black.cgColor
+        advancedSettingsButton.layer.shadowOpacity = 0.15
+        advancedSettingsButton.layer.shadowOffset = CGSize(width: 0, height: 12)
+        advancedSettingsButton.layer.shadowRadius = 20
+
+        advancedSettingsButton.addTarget(self, action: #selector(advancedSettingsButtonTapped), for: .touchUpInside)
+        view.addSubview(advancedSettingsButton)
+
+        advancedSettingsButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            advancedSettingsButton.centerYAnchor.constraint(equalTo: brushPaletteView.centerYAnchor),
+            advancedSettingsButton.leadingAnchor.constraint(equalTo: brushPaletteView.trailingAnchor, constant: 12),
+            advancedSettingsButton.widthAnchor.constraint(equalToConstant: 52),
+            advancedSettingsButton.heightAnchor.constraint(equalToConstant: 52)
+        ])
     }
 
     private func updateBrushButton(_ button: UIButton, index: Int, isSelected: Bool) {
@@ -602,6 +639,28 @@ class EnhancedCanvasViewController: UIViewController {
         }
     }
 
+    @objc private func advancedSettingsButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show advanced brush settings panel
+        let panel = AdvancedBrushSettingsPanel(configuration: brushEngine.config)
+        panel.delegate = self
+        panel.present(in: view)
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.advancedSettingsButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.advancedSettingsButton.transform = .identity
+            }
+        }
+
+        print("⚙️ Opening advanced brush settings")
+    }
+
     // MARK: - Auto-Hide Behavior
 
     private func scheduleAutoHide() {
@@ -620,6 +679,7 @@ class EnhancedCanvasViewController: UIViewController {
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
             self.layerSelectorView?.alpha = 0
             self.brushPaletteView?.alpha = 0
+            self.advancedSettingsButton?.alpha = 0
         }
 
         isUIVisible = false
@@ -635,6 +695,7 @@ class EnhancedCanvasViewController: UIViewController {
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
             self.layerSelectorView?.alpha = 1
             self.brushPaletteView?.alpha = 1
+            self.advancedSettingsButton?.alpha = 1
         }
 
         isUIVisible = true
@@ -803,5 +864,27 @@ extension EnhancedCanvasViewController: BrushSettingsPanelDelegate {
 
     func brushSettingsPanelDidCancel(_ panel: BrushSettingsPanel) {
         print("❌ Brush settings cancelled")
+    }
+}
+
+// MARK: - AdvancedBrushSettingsPanelDelegate
+
+extension EnhancedCanvasViewController: AdvancedBrushSettingsPanelDelegate {
+    func advancedBrushSettingsPanel(_ panel: AdvancedBrushSettingsPanel, didUpdateConfiguration config: BrushConfiguration) {
+        // Update entire brush engine configuration
+        brushEngine.config = config
+        updateDebugInfo()
+
+        print("🔧 Updated advanced brush configuration:")
+        print("  - Stabilization: \(Int(config.stabilization))")
+        print("  - Prediction: \(Int(config.prediction))")
+        print("  - Pressure Curve: \(config.pressureCurve.curveType)")
+        print("  - Velocity Dynamics: \(config.velocityDynamics.enabled ? "Enabled" : "Disabled")")
+        print("  - Jitter: \(config.jitter.enabled ? "Enabled" : "Disabled")")
+        print("  - Flow: \(Int(config.flow * 100))%")
+    }
+
+    func advancedBrushSettingsPanelDidCancel(_ panel: AdvancedBrushSettingsPanel) {
+        print("❌ Advanced brush settings cancelled")
     }
 }
