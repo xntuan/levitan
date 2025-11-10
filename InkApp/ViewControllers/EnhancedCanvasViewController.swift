@@ -1036,6 +1036,22 @@ extension EnhancedCanvasViewController: LayerSelectorDelegate {
             print("💧 Changed opacity for '\(layer.name)' to: \(opacityPercent)%")
         }
     }
+
+    func layerSelector(_ selector: LayerSelectorView, didReorderLayer layer: Layer, fromIndex: Int, toIndex: Int) {
+        // Reorder in layer manager
+        layerManager.moveLayer(from: fromIndex, to: toIndex)
+
+        // Refresh layer selector to update display
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        // Trigger compositing refresh (layers reordered)
+        renderer.compositeLayersForDisplay()
+
+        print("🔄 Reordered layer '\(layer.name)' from index \(fromIndex) to \(toIndex)")
+    }
 }
 
 // MARK: - BrushSettingsPanelDelegate

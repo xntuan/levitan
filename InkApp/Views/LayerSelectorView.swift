@@ -17,6 +17,7 @@ protocol LayerSelectorDelegate: AnyObject {
     func layerSelector(_ selector: LayerSelectorView, didRequestToggleLockFor layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didChangeBlendMode blendMode: Layer.BlendMode, for layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didChangeOpacity opacity: Float, for layer: Layer)
+    func layerSelector(_ selector: LayerSelectorView, didReorderLayer layer: Layer, fromIndex: Int, toIndex: Int)
 }
 
 class LayerSelectorView: UIView {
@@ -33,6 +34,15 @@ class LayerSelectorView: UIView {
     private var stackView: UIStackView!
     private var addButton: UIButton!
     private var layerCards: [UUID: LayerCardView] = [:]
+
+    // Drag & Drop state
+    private var isDragging = false
+    private var draggingCard: LayerCardView?
+    private var draggingLayer: Layer?
+    private var draggingStartIndex: Int = 0
+    private var draggingCurrentIndex: Int = 0
+    private var dragOffset: CGPoint = .zero
+    private var placeholderView: UIView?
 
     // MARK: - Initialization
 
@@ -216,8 +226,10 @@ extension LayerSelectorView: LayerCardDelegate {
     }
 
     func layerCard(_ card: LayerCardView, didLongPressLayer layer: Layer) {
-        // Show context menu for layer actions
-        showContextMenu(for: layer, from: card)
+        // Only show context menu if not dragging
+        if !isDragging {
+            showContextMenu(for: layer, from: card)
+        }
     }
 
     private func showContextMenu(for layer: Layer, from sourceView: UIView) {
@@ -386,6 +398,155 @@ extension LayerSelectorView: LayerCardDelegate {
         }
         return nil
     }
+
+    // MARK: - Drag & Drop
+
+    func layerCard(_ card: LayerCardView, didStartDraggingLayer layer: Layer, gesture: UILongPressGestureRecognizer) {
+        guard let cardIndex = stackView.arrangedSubviews.firstIndex(of: card) else { return }
+
+        isDragging = true
+        draggingCard = card
+        draggingLayer = layer
+        draggingStartIndex = cardIndex
+        draggingCurrentIndex = cardIndex
+
+        // Visual feedback - lift card
+        UIView.animate(withDuration: 0.2) {
+            card.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+            card.alpha = 0.9
+            card.layer.shadowColor = UIColor.black.cgColor
+            card.layer.shadowOpacity = 0.3
+            card.layer.shadowOffset = CGSize(width: 0, height: 8)
+            card.layer.shadowRadius = 16
+        }
+
+        // Create placeholder
+        createPlaceholder(at: cardIndex)
+    }
+
+    func layerCard(_ card: LayerCardView, didDragLayer layer: Layer, gesture: UIPanGestureRecognizer) {
+        guard isDragging, card == draggingCard else { return }
+
+        let translation = gesture.translation(in: scrollView)
+
+        switch gesture.state {
+        case .changed:
+            // Move card with finger
+            card.center = CGPoint(
+                x: card.center.x + translation.x,
+                y: card.center.y + translation.y
+            )
+            gesture.setTranslation(.zero, in: scrollView)
+
+            // Check if we need to reorder
+            updateDragPosition(for: card)
+
+        case .ended, .cancelled:
+            // End dragging
+            endDragging(card: card)
+
+        default:
+            break
+        }
+    }
+
+    private func createPlaceholder(at index: Int) {
+        // Remove existing placeholder
+        placeholderView?.removeFromSuperview()
+
+        // Create new placeholder with same size as card
+        let placeholder = UIView()
+        placeholder.backgroundColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.2)
+        placeholder.layer.cornerRadius = 12
+        placeholder.layer.borderWidth = 2
+        placeholder.layer.borderColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.5).cgColor
+
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            placeholder.widthAnchor.constraint(equalToConstant: 80),
+            placeholder.heightAnchor.constraint(equalToConstant: 64)
+        ])
+
+        placeholderView = placeholder
+        stackView.insertArrangedSubview(placeholder, at: index)
+    }
+
+    private func updateDragPosition(for card: LayerCardView) {
+        guard let cardIndex = stackView.arrangedSubviews.firstIndex(of: card) else { return }
+
+        // Find which position the card is over
+        let cardCenterX = card.center.x
+        var newIndex = cardIndex
+
+        for (index, view) in stackView.arrangedSubviews.enumerated() {
+            guard view != card, view != placeholderView, view != addButton else { continue }
+
+            let viewFrame = view.convert(view.bounds, to: scrollView)
+            if cardCenterX > viewFrame.minX && cardCenterX < viewFrame.maxX {
+                newIndex = index
+                break
+            }
+        }
+
+        // Update placeholder position if changed
+        if newIndex != draggingCurrentIndex {
+            draggingCurrentIndex = newIndex
+
+            // Animate placeholder move
+            UIView.animate(withDuration: 0.3) {
+                if let placeholder = self.placeholderView {
+                    self.stackView.removeArrangedSubview(placeholder)
+                    self.stackView.insertArrangedSubview(placeholder, at: newIndex)
+                    self.stackView.layoutIfNeeded()
+                }
+            }
+        }
+    }
+
+    private func endDragging(card: LayerCardView) {
+        guard isDragging, let layer = draggingLayer else { return }
+
+        // Calculate final index (accounting for placeholder)
+        let finalIndex = draggingCurrentIndex
+        let originalIndex = draggingStartIndex
+
+        // Animate card back to position
+        UIView.animate(withDuration: 0.3, animations: {
+            // Move card to placeholder position
+            if let placeholder = self.placeholderView {
+                let targetFrame = placeholder.convert(placeholder.bounds, to: self.scrollView)
+                card.center = CGPoint(
+                    x: targetFrame.midX,
+                    y: targetFrame.midY
+                )
+            }
+
+            // Reset visual effects
+            card.transform = .identity
+            card.alpha = 1.0
+            card.layer.shadowOpacity = 0
+
+        }) { _ in
+            // Remove placeholder
+            self.placeholderView?.removeFromSuperview()
+            self.placeholderView = nil
+
+            // Reinsert card at correct position
+            self.stackView.removeArrangedSubview(card)
+            self.stackView.insertArrangedSubview(card, at: finalIndex)
+            self.stackView.layoutIfNeeded()
+
+            // Notify delegate if position changed
+            if finalIndex != originalIndex {
+                self.delegate?.layerSelector(self, didReorderLayer: layer, fromIndex: originalIndex, toIndex: finalIndex)
+            }
+
+            // Reset drag state
+            self.isDragging = false
+            self.draggingCard = nil
+            self.draggingLayer = nil
+        }
+    }
 }
 
 // MARK: - LayerCardView
@@ -394,6 +555,8 @@ protocol LayerCardDelegate: AnyObject {
     func layerCard(_ card: LayerCardView, didSelectLayer layer: Layer)
     func layerCard(_ card: LayerCardView, didToggleVisibilityFor layer: Layer)
     func layerCard(_ card: LayerCardView, didLongPressLayer layer: Layer)
+    func layerCard(_ card: LayerCardView, didStartDraggingLayer layer: Layer, gesture: UILongPressGestureRecognizer)
+    func layerCard(_ card: LayerCardView, didDragLayer layer: Layer, gesture: UIPanGestureRecognizer)
 }
 
 class LayerCardView: UIView {
@@ -502,14 +665,26 @@ class LayerCardView: UIView {
         visibilityButton.addTarget(self, action: #selector(visibilityButtonTapped), for: .touchUpInside)
     }
 
+    // MARK: - Properties (Drag State)
+    private var isDraggingCard = false
+    private var longPressTriggered = false
+
     private func setupGestures() {
         // Tap to select
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(cardTapped))
         addGestureRecognizer(tapGesture)
 
-        // Long press for context menu
+        // Long press for context menu or drag start
         let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(cardLongPressed))
+        longPressGesture.minimumPressDuration = 0.5
         addGestureRecognizer(longPressGesture)
+
+        // Pan gesture for dragging
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(cardPanned))
+        addGestureRecognizer(panGesture)
+
+        // Allow long press and pan to work together
+        longPressGesture.require(toFail: tapGesture)
     }
 
     // MARK: - Configuration
@@ -556,12 +731,68 @@ class LayerCardView: UIView {
     }
 
     @objc private func cardLongPressed(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, let layer = layer else { return }
-        delegate?.layerCard(self, didLongPressLayer: layer)
+        guard let layer = layer else { return }
 
-        // Haptic feedback
-        let impact = UIImpactFeedbackGenerator(style: .medium)
-        impact.impactOccurred()
+        switch gesture.state {
+        case .began:
+            // Mark that long press was triggered
+            longPressTriggered = true
+
+            // Haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+
+            // Delay to see if user starts dragging
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self = self else { return }
+                // If user hasn't started dragging, show context menu
+                if self.longPressTriggered && !self.isDraggingCard {
+                    self.delegate?.layerCard(self, didLongPressLayer: layer)
+                    self.longPressTriggered = false
+                }
+            }
+
+        case .ended, .cancelled:
+            longPressTriggered = false
+            isDraggingCard = false
+
+        default:
+            break
+        }
+    }
+
+    @objc private func cardPanned(_ gesture: UIPanGestureRecognizer) {
+        guard let layer = layer else { return }
+
+        switch gesture.state {
+        case .began:
+            // If long press was triggered, start drag mode
+            if longPressTriggered {
+                isDraggingCard = true
+                longPressTriggered = false
+
+                // Notify delegate to start dragging
+                if let longPressGesture = gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer {
+                    delegate?.layerCard(self, didStartDraggingLayer: layer, gesture: longPressGesture)
+                }
+            }
+
+        case .changed:
+            // Continue dragging if in drag mode
+            if isDraggingCard {
+                delegate?.layerCard(self, didDragLayer: layer, gesture: gesture)
+            }
+
+        case .ended, .cancelled:
+            // End dragging
+            if isDraggingCard {
+                delegate?.layerCard(self, didDragLayer: layer, gesture: gesture)
+            }
+            isDraggingCard = false
+
+        default:
+            break
+        }
     }
 
     @objc private func visibilityButtonTapped() {
