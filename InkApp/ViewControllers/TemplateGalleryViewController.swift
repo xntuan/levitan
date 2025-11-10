@@ -396,6 +396,9 @@ extension EnhancedCanvasViewController {
         // Store current template
         currentTemplate = template
 
+        // Initialize artwork progress
+        artworkProgress = ArtworkProgress(templateId: template.id)
+
         // 1. Clear existing layers
         layerManager.layers.removeAll()
         layerManager.activeLayerIndex = 0
@@ -414,6 +417,9 @@ extension EnhancedCanvasViewController {
             // Create layer
             let layer = Layer(name: layerDef.name, opacity: 1.0)
             layerManager.addLayer(layer)
+
+            // Initialize layer progress
+            artworkProgress?.updateLayerProgress(layer.id, progress: 0.0)
 
             // Load mask image if available
             let maskImage = template.loadMaskImage(for: layerDef)
@@ -441,6 +447,7 @@ extension EnhancedCanvasViewController {
 
         // 5. Update UI
         updateLayerSelectorView()
+        updateProgressLabel()
         print("✅ Template loaded successfully")
     }
 

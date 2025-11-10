@@ -167,11 +167,12 @@ struct CompositeParams {
     int blendMode; // 0=normal, 1=multiply, 2=screen, 3=overlay, 4=add, 5=darken, 6=lighten
 };
 
-// Advanced layer compositing with blend modes
+// Advanced layer compositing with blend modes and mask support
 fragment float4 layer_composite_fragment(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> baseTexture [[texture(0)]],
     texture2d<float> layerTexture [[texture(1)]],
+    texture2d<float> maskTexture [[texture(2)]],
     constant CompositeParams &params [[buffer(0)]]
 ) {
     constexpr sampler textureSampler(
@@ -183,8 +184,11 @@ fragment float4 layer_composite_fragment(
     float4 baseColor = baseTexture.sample(textureSampler, in.texCoord);
     float4 layerColor = layerTexture.sample(textureSampler, in.texCoord);
 
-    // Early exit if layer is fully transparent
-    if (layerColor.a == 0.0) {
+    // Sample mask texture (white = 1.0 = visible, black = 0.0 = hidden)
+    float maskValue = maskTexture.sample(textureSampler, in.texCoord).r;
+
+    // Early exit if layer is fully transparent or masked out
+    if (layerColor.a == 0.0 || maskValue == 0.0) {
         return baseColor;
     }
 
@@ -214,8 +218,8 @@ fragment float4 layer_composite_fragment(
             break;
     }
 
-    // Apply layer opacity and alpha
-    float alpha = layerColor.a * params.opacity;
+    // Apply layer opacity, alpha, and mask
+    float alpha = layerColor.a * params.opacity * maskValue;
 
     // Final blend with base
     float4 result;

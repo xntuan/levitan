@@ -147,6 +147,7 @@ class EnhancedCanvasViewController: UIViewController {
         addUndoRedoButtons()
         addCompleteButton()
         addBackButton()  // Back to gallery (replaces library button)
+        addProgressLabel()  // Show current layer and progress
 
         // Start auto-hide timer
         scheduleAutoHide()
@@ -544,6 +545,51 @@ class EnhancedCanvasViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
+    private func addProgressLabel() {
+        progressLabel = UILabel()
+        progressLabel?.font = DesignTokens.Typography.systemFont(size: 14, weight: .medium)
+        progressLabel?.textColor = UIColor.white.withAlphaComponent(0.9)
+        progressLabel?.textAlignment = .center
+        progressLabel?.backgroundColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.85)
+        progressLabel?.layer.cornerRadius = 18
+        progressLabel?.clipsToBounds = true
+        progressLabel?.alpha = 0  // Will fade in after template loads
+
+        if let label = progressLabel {
+            view.addSubview(label)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
+                label.heightAnchor.constraint(equalToConstant: 36),
+                label.widthAnchor.constraint(greaterThanOrEqualToConstant: 150)
+            ])
+        }
+
+        updateProgressLabel()
+    }
+
+    private func updateProgressLabel() {
+        guard let label = progressLabel else { return }
+
+        if let progress = artworkProgress, let template = currentTemplate {
+            let layerName = layerManager.activeLayer?.name ?? "Unknown"
+            let completed = progress.completedLayerCount()
+            let total = template.layerDefinitions.count
+
+            label.text = "  \(layerName) • \(completed)/\(total) layers  "
+
+            // Show label
+            if label.alpha == 0 {
+                UIView.animate(withDuration: 0.3) {
+                    label.alpha = 1
+                }
+            }
+        } else {
+            label.text = "  Draw to begin  "
+        }
+    }
+
     @objc private func completeButtonTapped() {
         // Haptic feedback
         let impact = UIImpactFeedbackGenerator(style: .heavy)
@@ -891,6 +937,7 @@ class EnhancedCanvasViewController: UIViewController {
             self.advancedSettingsButton?.alpha = 0
             self.completeButton?.alpha = 0
             self.libraryButton?.alpha = 0
+            self.progressLabel?.alpha = 0
         }
 
         isUIVisible = false
@@ -912,6 +959,9 @@ class EnhancedCanvasViewController: UIViewController {
             self.advancedSettingsButton?.alpha = 1
             self.completeButton?.alpha = 1
             self.libraryButton?.alpha = 1
+            if self.artworkProgress != nil {
+                self.progressLabel?.alpha = 1
+            }
         }
 
         isUIVisible = true
