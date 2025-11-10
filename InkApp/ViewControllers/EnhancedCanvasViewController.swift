@@ -19,7 +19,7 @@ class EnhancedCanvasViewController: UIViewController {
     // Managers and Engine
     var renderer: EnhancedMetalRenderer!
     var layerManager: LayerManager!
-    var brushEngine: BrushEngine!
+    var brushEngine: EnhancedBrushEngine!
     var undoManager: DrawingUndoManager!
 
     // Canvas state
@@ -69,7 +69,7 @@ class EnhancedCanvasViewController: UIViewController {
         // Select first layer
         layerManager.selectLayer(at: 0)
 
-        // Initialize brush engine with default brush
+        // Initialize enhanced brush engine with default brush
         let defaultBrush = PatternBrush(
             type: .parallelLines,
             rotation: 45,
@@ -77,7 +77,11 @@ class EnhancedCanvasViewController: UIViewController {
             opacity: 0.8,
             scale: 1.0
         )
-        brushEngine = BrushEngine(brush: defaultBrush)
+
+        // Use "Natural" preset as default
+        var config = BrushConfiguration.natural
+        config.patternBrush = defaultBrush
+        brushEngine = EnhancedBrushEngine(configuration: config)
 
         // Initialize undo manager
         undoManager = DrawingUndoManager(maxUndoLevels: 50)
@@ -222,17 +226,17 @@ class EnhancedCanvasViewController: UIViewController {
     // MARK: - Brush Control
 
     func changeBrush(type: PatternBrush.PatternType) {
-        brushEngine.currentBrush.type = type
+        brushEngine.config.patternBrush.type = type
         print("🖌️ Brush changed to: \(type)")
     }
 
     func changeBrushRotation(_ degrees: Float) {
-        brushEngine.currentBrush.rotation = degrees
+        brushEngine.config.patternBrush.rotation = degrees
         print("🔄 Brush rotation: \(degrees)°")
     }
 
     func changeBrushSpacing(_ spacing: Float) {
-        brushEngine.currentBrush.spacing = spacing
+        brushEngine.config.patternBrush.spacing = spacing
         print("📏 Brush spacing: \(spacing)px")
     }
 
@@ -291,12 +295,13 @@ class EnhancedCanvasViewController: UIViewController {
         guard let label = debugLabel,
               let activeLayer = layerManager.activeLayer else { return }
 
-        let brushName = buttonName(for: brushEngine.currentBrush.type)
+        let brushName = buttonName(for: brushEngine.config.patternBrush.type)
 
         label.text = """
-        🎨 Ink Drawing App
+        🎨 Ink Drawing App (Enhanced)
         📄 Layer: \(activeLayer.name)
         🖌️ Brush: \(brushName)
+        ⚙️ Stabilization: \(Int(brushEngine.config.stabilization))
         👆 Tap to draw
         """
         #endif
@@ -582,7 +587,7 @@ class EnhancedCanvasViewController: UIViewController {
         impact.impactOccurred()
 
         // Show brush settings panel
-        let panel = BrushSettingsPanel(brush: brushEngine.currentBrush)
+        let panel = BrushSettingsPanel(brush: brushEngine.config.patternBrush)
         panel.delegate = self
         panel.present(in: view)
 
@@ -785,8 +790,8 @@ extension EnhancedCanvasViewController: LayerSelectorDelegate {
 
 extension EnhancedCanvasViewController: BrushSettingsPanelDelegate {
     func brushSettingsPanel(_ panel: BrushSettingsPanel, didUpdateBrush brush: PatternBrush) {
-        // Update brush engine
-        brushEngine.currentBrush = brush
+        // Update brush engine pattern brush
+        brushEngine.config.patternBrush = brush
         updateDebugInfo()
 
         print("🖌️ Updated brush settings:")
