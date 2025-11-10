@@ -14,10 +14,13 @@ class TemplateGalleryViewController: UIViewController {
 
     private var templates: [Template] = []
     private var filteredTemplates: [Template] = []
+    private var themeBooks: [ThemeBook] = []
     private var selectedCategory: Template.Category?
     private var selectedTemplateId: UUID?
 
     // UI Elements
+    private var themeBookScrollView: UIScrollView!
+    private var themeBookStack: UIStackView!
     private var collectionView: UICollectionView!
     private var filterScrollView: UIScrollView!
     private var filterStack: UIStackView!
@@ -33,9 +36,12 @@ class TemplateGalleryViewController: UIViewController {
         super.viewDidLoad()
         setupGradientBackground()
         loadTemplates()
+        loadThemeBooks()
+        setupThemeBookSection()
         setupCollectionView()
         setupFilterBar()
         setupNavigation()
+        setupAdminGesture()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -64,6 +70,153 @@ class TemplateGalleryViewController: UIViewController {
         // Load sample templates
         templates = Template.createSampleTemplates()
         filteredTemplates = templates
+    }
+
+    private func loadThemeBooks() {
+        // Load theme books
+        themeBooks = ThemeBook.createSampleThemeBooks()
+
+        // Filter to featured theme books only
+        themeBooks = themeBooks.filter { $0.isFeatured }.sorted { $0.order < $1.order }
+    }
+
+    private func setupThemeBookSection() {
+        // Only show if there are featured theme books
+        guard !themeBooks.isEmpty else { return }
+
+        // Section header
+        let headerStack = UIStackView()
+        headerStack.axis = .horizontal
+        headerStack.alignment = .center
+        headerStack.distribution = .equalSpacing
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = "✨ Featured Collections"
+        titleLabel.font = DesignTokens.Typography.systemFont(size: 20, weight: .bold)
+        titleLabel.textColor = DesignTokens.Colors.textPrimary
+
+        let seeAllButton = UIButton(type: .system)
+        seeAllButton.setTitle("See All →", for: .normal)
+        seeAllButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 15, weight: .medium)
+        seeAllButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        seeAllButton.addTarget(self, action: #selector(seeAllThemeBooksButtonTapped), for: .touchUpInside)
+
+        headerStack.addArrangedSubview(titleLabel)
+        headerStack.addArrangedSubview(seeAllButton)
+
+        view.addSubview(headerStack)
+
+        // Horizontal scroll view for theme books
+        themeBookScrollView = UIScrollView()
+        themeBookScrollView.showsHorizontalScrollIndicator = false
+        themeBookScrollView.contentInset = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        themeBookScrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(themeBookScrollView)
+
+        // Stack for theme book cards
+        themeBookStack = UIStackView()
+        themeBookStack.axis = .horizontal
+        themeBookStack.spacing = 16
+        themeBookStack.alignment = .center
+        themeBookStack.translatesAutoresizingMaskIntoConstraints = false
+        themeBookScrollView.addSubview(themeBookStack)
+
+        // Create theme book cards
+        for themeBook in themeBooks {
+            let card = createThemeBookCard(themeBook: themeBook)
+            themeBookStack.addArrangedSubview(card)
+        }
+
+        // Layout constraints
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
+            themeBookScrollView.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 12),
+            themeBookScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            themeBookScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            themeBookScrollView.heightAnchor.constraint(equalToConstant: 140),
+
+            themeBookStack.topAnchor.constraint(equalTo: themeBookScrollView.topAnchor),
+            themeBookStack.leadingAnchor.constraint(equalTo: themeBookScrollView.leadingAnchor, constant: 20),
+            themeBookStack.trailingAnchor.constraint(equalTo: themeBookScrollView.trailingAnchor, constant: -20),
+            themeBookStack.bottomAnchor.constraint(equalTo: themeBookScrollView.bottomAnchor),
+            themeBookStack.heightAnchor.constraint(equalToConstant: 140)
+        ])
+    }
+
+    private func createThemeBookCard(themeBook: ThemeBook) -> UIView {
+        let card = UIButton(type: .custom)
+        card.tag = themeBooks.firstIndex(where: { $0.id == themeBook.id }) ?? 0
+        card.addTarget(self, action: #selector(themeBookCardTapped(_:)), for: .touchUpInside)
+
+        // Set size
+        card.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        card.heightAnchor.constraint(equalToConstant: 140).isActive = true
+
+        // Background gradient
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.frame = CGRect(x: 0, y: 0, width: 260, height: 140)
+        gradientLayer.cornerRadius = 16
+
+        let baseColor = UIColor(hex: themeBook.color)
+        let lighterColor = baseColor.lighter(by: 0.15) ?? baseColor
+        let darkerColor = baseColor.darker(by: 0.15) ?? baseColor
+
+        gradientLayer.colors = [lighterColor.cgColor, darkerColor.cgColor]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+
+        card.layer.insertSublayer(gradientLayer, at: 0)
+        card.layer.cornerRadius = 16
+        card.clipsToBounds = true
+
+        // Shadow
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.15
+        card.layer.shadowOffset = CGSize(width: 0, height: 5)
+        card.layer.shadowRadius = 10
+
+        // Icon
+        let iconLabel = UILabel()
+        iconLabel.text = themeBook.icon
+        iconLabel.font = .systemFont(ofSize: 40)
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(iconLabel)
+
+        // Title
+        let titleLabel = UILabel()
+        titleLabel.text = themeBook.title
+        titleLabel.font = DesignTokens.Typography.systemFont(size: 18, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.numberOfLines = 2
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(titleLabel)
+
+        // Template count
+        let countLabel = UILabel()
+        let count = themeBook.templateIds.count
+        countLabel.text = "\(count) template\(count == 1 ? "" : "s")"
+        countLabel.font = DesignTokens.Typography.systemFont(size: 13, weight: .medium)
+        countLabel.textColor = UIColor.white.withAlphaComponent(0.9)
+        countLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(countLabel)
+
+        NSLayoutConstraint.activate([
+            iconLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            iconLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+
+            titleLabel.topAnchor.constraint(equalTo: iconLabel.bottomAnchor, constant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+
+            countLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+            countLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16)
+        ])
+
+        return card
     }
 
     private func setupCollectionView() {
@@ -121,6 +274,15 @@ class TemplateGalleryViewController: UIViewController {
         createFilterChips()
 
         // Layout constraints
+        let collectionTopAnchor: NSLayoutYAxisAnchor
+        if !themeBooks.isEmpty, let themeBookScrollView = themeBookScrollView {
+            // If theme books exist, position collection view below them
+            collectionTopAnchor = themeBookScrollView.bottomAnchor
+        } else {
+            // Otherwise, position at top of safe area
+            collectionTopAnchor = view.safeAreaLayoutGuide.topAnchor
+        }
+
         NSLayoutConstraint.activate([
             // Blur view fills scroll view
             blurView.topAnchor.constraint(equalTo: filterScrollView.topAnchor),
@@ -135,7 +297,7 @@ class TemplateGalleryViewController: UIViewController {
             filterScrollView.heightAnchor.constraint(equalToConstant: 68),
 
             // Collection view fills remaining space
-            collectionView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            collectionView.topAnchor.constraint(equalTo: collectionTopAnchor, constant: 16),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: filterScrollView.topAnchor, constant: -8),
@@ -221,7 +383,81 @@ class TemplateGalleryViewController: UIViewController {
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
     }
 
+    private func setupAdminGesture() {
+        // Secret gesture: triple-tap with 3 fingers to open admin panel
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(adminGestureTriggered))
+        tapGesture.numberOfTapsRequired = 3
+        tapGesture.numberOfTouchesRequired = 3
+        view.addGestureRecognizer(tapGesture)
+    }
+
     // MARK: - Actions
+
+    @objc private func adminGestureTriggered() {
+        print("🎛️ Admin gesture detected - opening Admin Panel")
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.impactOccurred()
+
+        // Show admin panel
+        let adminVC = AdminPanelViewController()
+        let navController = UINavigationController(rootViewController: adminVC)
+        navController.modalPresentationStyle = .fullScreen
+        present(navController, animated: true)
+    }
+
+    @objc private func seeAllThemeBooksButtonTapped() {
+        // Navigate to full theme book gallery
+        let themeBookGalleryVC = ThemeBookGalleryViewController()
+        navigationController?.pushViewController(themeBookGalleryVC, animated: true)
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+    }
+
+    @objc private func themeBookCardTapped(_ sender: UIButton) {
+        guard sender.tag < themeBooks.count else { return }
+        let themeBook = themeBooks[sender.tag]
+
+        // Animate card
+        UIView.animate(withDuration: 0.1) {
+            sender.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0.5) {
+                sender.transform = .identity
+            }
+        }
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Navigate to theme book templates
+        if themeBook.isLocked {
+            showLockedAlert(for: themeBook)
+        } else {
+            let templatesVC = ThemeBookTemplatesViewController(themeBook: themeBook)
+            navigationController?.pushViewController(templatesVC, animated: true)
+        }
+    }
+
+    private func showLockedAlert(for themeBook: ThemeBook) {
+        let alert = UIAlertController(
+            title: "Premium Theme Book",
+            message: "\"\(themeBook.title)\" is a premium collection. Upgrade to unlock all theme books.",
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: "Maybe Later", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Upgrade", style: .default) { _ in
+            // TODO: Navigate to premium upgrade screen
+            print("Navigate to premium upgrade")
+        })
+
+        present(alert, animated: true)
+    }
 
     @objc private func filterChipTapped(_ sender: UIButton) {
         // Update selected chip
