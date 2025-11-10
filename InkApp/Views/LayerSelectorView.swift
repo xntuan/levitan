@@ -15,6 +15,7 @@ protocol LayerSelectorDelegate: AnyObject {
     func layerSelector(_ selector: LayerSelectorView, didRequestDeleteLayer layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didRequestRenameLayer layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didRequestToggleLockFor layer: Layer)
+    func layerSelector(_ selector: LayerSelectorView, didChangeBlendMode blendMode: Layer.BlendMode, for layer: Layer)
 }
 
 class LayerSelectorView: UIView {
@@ -223,6 +224,13 @@ extension LayerSelectorView: LayerCardDelegate {
 
         let alert = UIAlertController(title: layer.name, message: nil, preferredStyle: .actionSheet)
 
+        // Blend Mode
+        let currentBlendMode = layer.blendMode.displayName
+        alert.addAction(UIAlertAction(title: "Blend Mode: \(currentBlendMode)", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            self.showBlendModeMenu(for: layer, from: sourceView)
+        })
+
         // Lock/Unlock
         let lockTitle = layer.isLocked ? "Unlock Layer" : "Lock Layer"
         let lockIcon = layer.isLocked ? "lock.open" : "lock"
@@ -242,6 +250,37 @@ extension LayerSelectorView: LayerCardDelegate {
             alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
                 guard let self = self else { return }
                 self.delegate?.layerSelector(self, didRequestDeleteLayer: layer)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // For iPad, set source view
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+
+        viewController.present(alert, animated: true)
+    }
+
+    private func showBlendModeMenu(for layer: Layer, from sourceView: UIView) {
+        guard let viewController = findViewController() else { return }
+
+        let alert = UIAlertController(title: "Select Blend Mode", message: nil, preferredStyle: .actionSheet)
+
+        // All 7 blend modes
+        let allBlendModes: [Layer.BlendMode] = [
+            .normal, .multiply, .screen, .overlay, .add, .darken, .lighten
+        ]
+
+        for blendMode in allBlendModes {
+            let isCurrentMode = blendMode == layer.blendMode
+            let title = isCurrentMode ? "✓ \(blendMode.displayName)" : blendMode.displayName
+
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.delegate?.layerSelector(self, didChangeBlendMode: blendMode, for: layer)
             })
         }
 

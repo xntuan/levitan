@@ -85,6 +85,12 @@ class LayerManager {
         layers[index].blendMode = blendMode
     }
 
+    /// Rename layer
+    func renameLayer(at index: Int, to newName: String) {
+        guard index < layers.count else { return }
+        layers[index].name = newName
+    }
+
     // MARK: - Query Methods
 
     /// Get visible layers

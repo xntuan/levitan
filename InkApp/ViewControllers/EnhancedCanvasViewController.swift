@@ -990,6 +990,19 @@ extension EnhancedCanvasViewController: LayerSelectorDelegate {
             print("🔒 \(status.capitalized) layer: '\(layer.name)'")
         }
     }
+
+    func layerSelector(_ selector: LayerSelectorView, didChangeBlendMode blendMode: Layer.BlendMode, for layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.setLayerBlendMode(blendMode, at: index)
+
+            // Update layer selector to show new blend mode
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            print("🎨 Changed blend mode for '\(layer.name)' to: \(blendMode.displayName)")
+        }
+    }
 }
 
 // MARK: - BrushSettingsPanelDelegate
