@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hatching Shading Studio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main-canvas {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        h1 {
+            font-size: 1.5em;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.85em;
+            margin-bottom: 25px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #34495e;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .object-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .object-btn {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        .object-btn:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+        }
+
+        .object-btn.active {
+            border-color: #3498db;
+            background: #ebf5fb;
+            color: #3498db;
+            font-weight: 600;
+        }
+
+        .brush-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .brush-btn {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.8em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .brush-btn:hover {
+            border-color: #e74c3c;
+            box-shadow: 0 2px 8px rgba(231, 76, 60, 0.2);
+        }
+
+        .brush-btn.active {
+            border-color: #e74c3c;
+            background: #fadbd8;
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .brush-icon {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.85em;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+
+        .value-display {
+            display: inline-block;
+            float: right;
+            font-weight: 600;
+            color: #3498db;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .clear-btn {
+            background: #ecf0f1;
+            color: #555;
+        }
+
+        .clear-btn:hover {
+            background: #bdc3c7;
+        }
+
+        .guide-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .guide-btn:hover {
+            background: #2980b9;
+        }
+
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            cursor: crosshair;
+            background: white;
+        }
+
+        .canvas-info {
+            margin-top: 15px;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .tip {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.8em;
+            color: #856404;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>✏️ Hatching Studio</h1>
+        <p class="subtitle">Vẽ shading như traditional pen & ink</p>
+
+        <div class="section">
+            <div class="section-title">Objects</div>
+            <div class="object-grid">
+                <button class="object-btn active" data-object="sphere">🔵 Sphere</button>
+                <button class="object-btn" data-object="cube">📦 Cube</button>
+                <button class="object-btn" data-object="hand">✋ Hand</button>
+                <button class="object-btn" data-object="rock">🪨 Rock</button>
+                <button class="object-btn" data-object="apple">🍎 Apple</button>
+                <button class="object-btn" data-object="leaf">🍃 Leaf</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Hatching Brushes</div>
+            <div class="brush-grid">
+                <button class="brush-btn active" data-brush="parallel">
+                    <canvas class="brush-icon" data-preview="parallel"></canvas>
+                    <span>Parallel</span>
+                </button>
+                <button class="brush-btn" data-brush="cross">
+                    <canvas class="brush-icon" data-preview="cross"></canvas>
+                    <span>Cross</span>
+                </button>
+                <button class="brush-btn" data-brush="contour">
+                    <canvas class="brush-icon" data-preview="contour"></canvas>
+                    <span>Contour</span>
+                </button>
+                <button class="brush-btn" data-brush="stipple">
+                    <canvas class="brush-icon" data-preview="stipple"></canvas>
+                    <span>Stipple</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="control-group">
+                <label>
+                    Spacing
+                    <span class="value-display" id="spacingValue">6</span>
+                </label>
+                <input type="range" id="spacing" min="2" max="12" value="6">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Line Length
+                    <span class="value-display" id="lengthValue">20</span>
+                </label>
+                <input type="range" id="lineLength" min="10" max="40" value="20">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Brush Size
+                    <span class="value-display" id="sizeValue">15</span>
+                </label>
+                <input type="range" id="brushSize" min="5" max="30" value="15">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Angle
+                    <span class="value-display" id="angleValue">45°</span>
+                </label>
+                <input type="range" id="angle" min="0" max="180" value="45">
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="action-btn clear-btn" id="clearBtn">Clear</button>
+            <button class="action-btn guide-btn" id="guideBtn">Toggle Guide</button>
+        </div>
+
+        <div class="section">
+            <div class="tip">
+                💡 <strong>Tip:</strong> Vẽ theo hướng của form. Lighter areas = ít strokes, darker areas = nhiều layers cross-hatching.
+            </div>
+        </div>
+    </div>
+
+    <div class="main-canvas">
+        <canvas id="mainCanvas" width="700" height="700"></canvas>
+        <div class="canvas-info">
+            Click và drag để vẽ • Theo form của object để tạo realistic shading
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let currentObject = 'sphere';
+        let currentBrush = 'parallel';
+        let spacing = 6;
+        let lineLength = 20;
+        let brushSize = 15;
+        let angle = 45;
+        let isDrawing = false;
+        let showGuide = true;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Draw brush previews
+        function drawBrushPreviews() {
+            document.querySelectorAll('[data-preview]').forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                const type = canvas.dataset.preview;
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 40, 40);
+                
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                
+                switch(type) {
+                    case 'parallel':
+                        for (let i = 5; i < 35; i += 5) {
+                            ctx.beginPath();
+                            ctx.moveTo(i, 5);
+                            ctx.lineTo(i, 35);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'cross':
+                        for (let i = 5; i < 35; i += 5) {
+                            ctx.beginPath();
+                            ctx.moveTo(i, 5);
+                            ctx.lineTo(i, 35);
+                            ctx.stroke();
+                        }
+                        for (let i = 5; i < 35; i += 5) {
+                            ctx.beginPath();
+                            ctx.moveTo(5, i);
+                            ctx.lineTo(35, i);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'contour':
+                        for (let i = 0; i < 6; i++) {
+                            ctx.beginPath();
+                            ctx.arc(20, 20, 5 + i * 3, 0, Math.PI * 2);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'stipple':
+                        for (let i = 0; i < 40; i++) {
+                            const x = Math.random() * 30 + 5;
+                            const y = Math.random() * 30 + 5;
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                        break;
+                }
+            });
+        }
+
+        // Draw object outline/guide
+        function drawObjectGuide() {
+            if (!showGuide) return;
+            
+            ctx.strokeStyle = '#bdc3c7';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            
+            const cx = 350, cy = 350;
+            
+            switch(currentObject) {
+                case 'sphere':
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 150, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // Light direction indicator
+                    ctx.beginPath();
+                    ctx.arc(cx - 60, cy - 60, 30, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                    
+                case 'cube':
+                    ctx.beginPath();
+                    ctx.moveTo(cx - 100, cy);
+                    ctx.lineTo(cx, cy - 100);
+                    ctx.lineTo(cx + 100, cy);
+                    ctx.lineTo(cx + 100, cy + 100);
+                    ctx.lineTo(cx, cy + 200);
+                    ctx.lineTo(cx - 100, cy + 100);
+                    ctx.closePath();
+                    ctx.stroke();
+                    
+                    ctx.moveTo(cx, cy - 100);
+                    ctx.lineTo(cx, cy + 100);
+                    ctx.stroke();
+                    
+                    ctx.moveTo(cx + 100, cy);
+                    ctx.lineTo(cx, cy + 100);
+                    ctx.stroke();
+                    break;
+                    
+                case 'hand':
+                    // Simplified hand outline
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy + 100);
+                    ctx.lineTo(cx - 40, cy + 50);
+                    ctx.lineTo(cx - 50, cy - 20);
+                    ctx.lineTo(cx - 20, cy - 80);
+                    ctx.lineTo(cx, cy - 100);
+                    ctx.lineTo(cx + 20, cy - 80);
+                    ctx.lineTo(cx + 30, cy - 90);
+                    ctx.lineTo(cx + 50, cy - 70);
+                    ctx.lineTo(cx + 40, cy - 40);
+                    ctx.lineTo(cx + 60, cy - 30);
+                    ctx.lineTo(cx + 70, cy - 10);
+                    ctx.lineTo(cx + 60, cy + 10);
+                    ctx.lineTo(cx + 50, cy);
+                    ctx.lineTo(cx + 40, cy + 50);
+                    ctx.lineTo(cx, cy + 100);
+                    ctx.stroke();
+                    break;
+                    
+                case 'rock':
+                    ctx.beginPath();
+                    ctx.moveTo(cx - 120, cy + 80);
+                    ctx.lineTo(cx - 80, cy - 60);
+                    ctx.lineTo(cx - 20, cy - 100);
+                    ctx.lineTo(cx + 60, cy - 80);
+                    ctx.lineTo(cx + 100, cy - 20);
+                    ctx.lineTo(cx + 120, cy + 60);
+                    ctx.lineTo(cx + 40, cy + 100);
+                    ctx.lineTo(cx - 60, cy + 90);
+                    ctx.closePath();
+                    ctx.stroke();
+                    break;
+                    
+                case 'apple':
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - 100);
+                    ctx.bezierCurveTo(cx - 100, cy - 100, cx - 120, cy + 50, cx, cy + 100);
+                    ctx.bezierCurveTo(cx + 120, cy + 50, cx + 100, cy - 100, cx, cy - 100);
+                    ctx.stroke();
+                    
+                    // Stem
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - 100);
+                    ctx.quadraticCurveTo(cx + 10, cy - 120, cx + 20, cy - 130);
+                    ctx.stroke();
+                    break;
+                    
+                case 'leaf':
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - 120);
+                    ctx.bezierCurveTo(cx + 80, cy - 80, cx + 100, cy, cx + 60, cy + 80);
+                    ctx.bezierCurveTo(cx + 40, cy + 100, cx, cy + 120, cx, cy + 120);
+                    ctx.bezierCurveTo(cx, cy + 120, cx - 40, cy + 100, cx - 60, cy + 80);
+                    ctx.bezierCurveTo(cx - 100, cy, cx - 80, cy - 80, cx, cy - 120);
+                    ctx.stroke();
+                    
+                    // Vein
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - 120);
+                    ctx.lineTo(cx, cy + 120);
+                    ctx.stroke();
+                    break;
+            }
+            
+            ctx.setLineDash([]);
+        }
+
+        function redrawCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawObjectGuide();
+        }
+
+        function drawHatchStroke(x, y) {
+            ctx.strokeStyle = 'rgba(44, 62, 80, 0.7)';
+            ctx.lineWidth = 1;
+            ctx.lineCap = 'round';
+            
+            const rad = (angle * Math.PI) / 180;
+            
+            switch(currentBrush) {
+                case 'parallel':
+                    for (let i = -brushSize; i < brushSize; i += spacing) {
+                        ctx.beginPath();
+                        const offsetX = i * Math.cos(rad + Math.PI/2);
+                        const offsetY = i * Math.sin(rad + Math.PI/2);
+                        const startX = x + offsetX - (lineLength/2) * Math.cos(rad);
+                        const startY = y + offsetY - (lineLength/2) * Math.sin(rad);
+                        const endX = x + offsetX + (lineLength/2) * Math.cos(rad);
+                        const endY = y + offsetY + (lineLength/2) * Math.sin(rad);
+                        ctx.moveTo(startX, startY);
+                        ctx.lineTo(endX, endY);
+                        ctx.stroke();
+                    }
+                    break;
+                    
+                case 'cross':
+                    // First set of lines
+                    for (let i = -brushSize; i < brushSize; i += spacing) {
+                        ctx.beginPath();
+                        const offsetX = i * Math.cos(rad + Math.PI/2);
+                        const offsetY = i * Math.sin(rad + Math.PI/2);
+                        const startX = x + offsetX - (lineLength/2) * Math.cos(rad);
+                        const startY = y + offsetY - (lineLength/2) * Math.sin(rad);
+                        const endX = x + offsetX + (lineLength/2) * Math.cos(rad);
+                        const endY = y + offsetY + (lineLength/2) * Math.sin(rad);
+                        ctx.moveTo(startX, startY);
+                        ctx.lineTo(endX, endY);
+                        ctx.stroke();
+                    }
+                    // Second set perpendicular
+                    const rad2 = rad + Math.PI/2;
+                    for (let i = -brushSize; i < brushSize; i += spacing) {
+                        ctx.beginPath();
+                        const offsetX = i * Math.cos(rad2 + Math.PI/2);
+                        const offsetY = i * Math.sin(rad2 + Math.PI/2);
+                        const startX = x + offsetX - (lineLength/2) * Math.cos(rad2);
+                        const startY = y + offsetY - (lineLength/2) * Math.sin(rad2);
+                        const endX = x + offsetX + (lineLength/2) * Math.cos(rad2);
+                        const endY = y + offsetY + (lineLength/2) * Math.sin(rad2);
+                        ctx.moveTo(startX, startY);
+                        ctx.lineTo(endX, endY);
+                        ctx.stroke();
+                    }
+                    break;
+                    
+                case 'contour':
+                    const centerDist = Math.sqrt((x - 350) ** 2 + (y - 350) ** 2);
+                    const numLines = 5;
+                    for (let i = 0; i < numLines; i++) {
+                        const radius = centerDist + (i - numLines/2) * spacing;
+                        if (radius < 5) continue;
+                        
+                        const angleToCenter = Math.atan2(y - 350, x - 350);
+                        const arcLength = lineLength / radius;
+                        
+                        ctx.beginPath();
+                        ctx.arc(350, 350, radius, 
+                               angleToCenter - arcLength/2, 
+                               angleToCenter + arcLength/2);
+                        ctx.stroke();
+                    }
+                    break;
+                    
+                case 'stipple':
+                    ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
+                    for (let i = 0; i < 20; i++) {
+                        const offsetX = (Math.random() - 0.5) * brushSize * 2;
+                        const offsetY = (Math.random() - 0.5) * brushSize * 2;
+                        ctx.beginPath();
+                        ctx.arc(x + offsetX, y + offsetY, 0.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    break;
+            }
+        }
+
+        // Event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            drawHatchStroke(lastX, lastY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Draw along the path
+            const dist = Math.sqrt((x - lastX) ** 2 + (y - lastY) ** 2);
+            if (dist > 5) {
+                drawHatchStroke(x, y);
+                lastX = x;
+                lastY = y;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        // Object selection
+        document.querySelectorAll('.object-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.object-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentObject = this.dataset.object;
+                redrawCanvas();
+            });
+        });
+
+        // Brush selection
+        document.querySelectorAll('.brush-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentBrush = this.dataset.brush;
+            });
+        });
+
+        // Controls
+        document.getElementById('spacing').addEventListener('input', function() {
+            spacing = parseInt(this.value);
+            document.getElementById('spacingValue').textContent = spacing;
+        });
+
+        document.getElementById('lineLength').addEventListener('input', function() {
+            lineLength = parseInt(this.value);
+            document.getElementById('lengthValue').textContent = lineLength;
+        });
+
+        document.getElementById('brushSize').addEventListener('input', function() {
+            brushSize = parseInt(this.value);
+            document.getElementById('sizeValue').textContent = brushSize;
+        });
+
+        document.getElementById('angle').addEventListener('input', function() {
+            angle = parseInt(this.value);
+            document.getElementById('angleValue').textContent = angle + '°';
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            redrawCanvas();
+        });
+
+        document.getElementById('guideBtn').addEventListener('click', () => {
+            showGuide = !showGuide;
+            redrawCanvas();
+        });
+
+        // Initialize
+        drawBrushPreviews();
+        redrawCanvas();
+    </script>
+</body>
+</html>

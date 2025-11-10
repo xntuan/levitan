@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shade - Meditative Hatching</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            touch-action: none;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Lake-style top bar - minimal, fades out */
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.5s ease;
+        }
+
+        .top-bar.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .app-title {
+            font-size: 24px;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.9);
+            letter-spacing: 2px;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .icon-btn:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.35);
+        }
+
+        /* Canvas area - full bleed */
+        .canvas-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            max-width: 95%;
+            max-height: 95%;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            background: white;
+            touch-action: none;
+        }
+
+        /* Floating guide - subtle, dismissible */
+        .guide-card {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 20px 24px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            text-align: center;
+            animation: floatIn 0.6s ease;
+            z-index: 5;
+        }
+
+        .guide-card.dismissed {
+            animation: floatOut 0.4s ease forwards;
+        }
+
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        @keyframes floatOut {
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+        }
+
+        .guide-emoji {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .guide-text {
+            font-size: 15px;
+            color: #666;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        .guide-dismiss {
+            margin-top: 12px;
+            padding: 8px 20px;
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* Bottom controls - Lake style */
+        .bottom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+        }
+
+        .bottom-controls.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .control-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .control-btn:active {
+            transform: scale(0.92);
+        }
+
+        .control-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        }
+
+        .control-btn.active .btn-icon {
+            filter: brightness(0) invert(1);
+        }
+
+        .btn-icon {
+            font-size: 24px;
+            transition: all 0.3s ease;
+        }
+
+        /* Brush selector - expands from button */
+        .brush-panel {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%) scale(0.8);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .brush-panel.visible {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+            pointer-events: all;
+        }
+
+        .brush-option {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: white;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .brush-option:active {
+            transform: scale(0.95);
+        }
+
+        .brush-option.selected {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+
+        .brush-icon-preview {
+            width: 32px;
+            height: 32px;
+        }
+
+        .brush-name {
+            font-size: 10px;
+            color: #999;
+            font-weight: 500;
+        }
+
+        /* Progress indicator - minimal Lake style */
+        .progress-indicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            transition: opacity 0.5s ease;
+        }
+
+        .progress-indicator.hidden {
+            opacity: 0;
+        }
+
+        /* Completion celebration - Lake style */
+        .completion-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 100;
+        }
+
+        .completion-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .completion-content {
+            text-align: center;
+            color: white;
+            animation: celebrateIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes celebrateIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .completion-emoji {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: bounce 0.6s ease;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .completion-title {
+            font-size: 32px;
+            font-weight: 300;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .completion-subtitle {
+            font-size: 16px;
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+
+        .completion-btn {
+            padding: 16px 40px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .completion-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Subtle particle effects */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+            50% { transform: translateY(-30px) translateX(10px); opacity: 1; }
+        }
+
+        /* Level selector - Lake inspired */
+        .level-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            z-index: 50;
+            overflow-y: auto;
+        }
+
+        .level-menu.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .level-menu-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .level-menu-title {
+            font-size: 28px;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.95);
+            letter-spacing: 2px;
+        }
+
+        .level-cards-container {
+            display: grid;
+            gap: 16px;
+            padding-bottom: 40px;
+        }
+
+        .level-card-lake {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .level-card-lake:active {
+            transform: scale(0.98);
+        }
+
+        .level-card-lake.locked {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .level-card-lake.completed {
+            border-color: rgba(118, 75, 162, 0.3);
+        }
+
+        .level-card-top {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .level-emoji-large {
+            font-size: 48px;
+        }
+
+        .level-info {
+            flex: 1;
+        }
+
+        .level-name {
+            font-size: 18px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .level-difficulty {
+            font-size: 13px;
+            color: #999;
+        }
+
+        .level-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        /* Ambient background pattern */
+        .bg-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(0,0,0,.1) 35px, rgba(0,0,0,.1) 36px);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    
+    <div class="app-container">
+        <!-- Top bar -->
+        <div class="top-bar" id="topBar">
+            <div class="app-title">shade</div>
+            <button class="icon-btn" id="menuBtn">☰</button>
+        </div>
+
+        <!-- Progress indicator -->
+        <div class="progress-indicator" id="progressIndicator">
+            ✨ 0% complete
+        </div>
+
+        <!-- Canvas -->
+        <div class="canvas-wrapper">
+            <canvas id="mainCanvas"></canvas>
+            
+            <!-- Floating guide -->
+            <div class="guide-card" id="guideCard">
+                <div class="guide-emoji">🎨</div>
+                <div class="guide-text">
+                    Vẽ hatching strokes theo form của object.<br>
+                    Relax và enjoy the process.
+                </div>
+                <button class="guide-dismiss" id="dismissGuide">Got it ✨</button>
+            </div>
+        </div>
+
+        <!-- Bottom controls -->
+        <div class="bottom-controls" id="bottomControls">
+            <button class="control-btn" id="brushBtn">
+                <span class="btn-icon">🖌️</span>
+            </button>
+            <button class="control-btn" id="hintBtn">
+                <span class="btn-icon">💡</span>
+            </button>
+            <button class="control-btn" id="undoBtn">
+                <span class="btn-icon">↶</span>
+            </button>
+            <button class="control-btn" id="checkBtn">
+                <span class="btn-icon">✓</span>
+            </button>
+        </div>
+
+        <!-- Brush panel -->
+        <div class="brush-panel" id="brushPanel">
+            <div class="brush-option selected" data-brush="parallel">
+                <canvas class="brush-icon-preview" data-preview="parallel"></canvas>
+                <span class="brush-name">Parallel</span>
+            </div>
+            <div class="brush-option" data-brush="cross">
+                <canvas class="brush-icon-preview" data-preview="cross"></canvas>
+                <span class="brush-name">Cross</span>
+            </div>
+            <div class="brush-option" data-brush="contour">
+                <canvas class="brush-icon-preview" data-preview="contour"></canvas>
+                <span class="brush-name">Contour</span>
+            </div>
+            <div class="brush-option" data-brush="stipple">
+                <canvas class="brush-icon-preview" data-preview="stipple"></canvas>
+                <span class="brush-name">Dots</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level menu -->
+    <div class="level-menu" id="levelMenu">
+        <div class="level-menu-header">
+            <div class="level-menu-title">choose</div>
+            <button class="icon-btn" id="closeMenuBtn">✕</button>
+        </div>
+        <div class="level-cards-container" id="levelCardsContainer"></div>
+    </div>
+
+    <!-- Completion overlay -->
+    <div class="completion-overlay" id="completionOverlay">
+        <div class="completion-content">
+            <div class="completion-emoji">✨</div>
+            <div class="completion-title">Beautiful Work</div>
+            <div class="completion-subtitle">You've completed this piece</div>
+            <button class="completion-btn" id="continueBtn">Continue</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let currentBrush = 'parallel';
+        let showingHint = false;
+        let hideUITimeout;
+        let strokeCount = 0;
+        const targetStrokes = 50;
+
+        const levels = [
+            { id: 0, name: "Peaceful Sphere", emoji: "🔵", difficulty: "Begin", desc: "Learn light and shadow with a simple form" },
+            { id: 1, name: "Gentle Cube", emoji: "📦", difficulty: "Easy", desc: "Practice planes and edges" },
+            { id: 2, name: "Calm Apple", emoji: "🍎", difficulty: "Calm", desc: "Follow curved organic forms" },
+            { id: 3, name: "Quiet Stone", emoji: "🪨", difficulty: "Peaceful", desc: "Explore texture and irregularity" },
+            { id: 4, name: "Soft Leaf", emoji: "🍃", difficulty: "Flow", desc: "Practice natural contours" }
+        ];
+
+        function setupCanvas() {
+            const wrapper = document.querySelector('.canvas-wrapper');
+            const size = Math.min(wrapper.clientWidth, wrapper.clientHeight) * 0.85;
+            canvas.width = size;
+            canvas.height = size;
+            drawInitialGuide();
+        }
+
+        function drawInitialGuide() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = canvas.width * 0.3;
+
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Very subtle guide
+            ctx.strokeStyle = 'rgba(102, 126, 234, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Subtle highlight indicator
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBrushPreview(canvasEl, type) {
+            const ctx = canvasEl.getContext('2d');
+            canvasEl.width = 32;
+            canvasEl.height = 32;
+            
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, 32, 32);
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 1;
+
+            switch(type) {
+                case 'parallel':
+                    for (let i = 4; i < 28; i += 4) {
+                        ctx.beginPath();
+                        ctx.moveTo(i, 4);
+                        ctx.lineTo(i, 28);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'cross':
+                    for (let i = 4; i < 28; i += 5) {
+                        ctx.beginPath();
+                        ctx.moveTo(i, 4);
+                        ctx.lineTo(i, 28);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(4, i);
+                        ctx.lineTo(28, i);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'contour':
+                    for (let i = 0; i < 4; i++) {
+                        ctx.beginPath();
+                        ctx.arc(16, 16, 4 + i * 4, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'stipple':
+                    ctx.fillStyle = '#667eea';
+                    for (let i = 0; i < 30; i++) {
+                        const x = 6 + Math.random() * 20;
+                        const y = 6 + Math.random() * 20;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    break;
+            }
+        }
+
+        function drawStroke(x, y) {
+            ctx.strokeStyle = 'rgba(102, 126, 234, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.lineCap = 'round';
+
+            const spacing = 5;
+            const length = 15;
+
+            for (let i = -10; i < 10; i += spacing) {
+                ctx.beginPath();
+                ctx.moveTo(x + i, y - length/2);
+                ctx.lineTo(x + i, y + length/2);
+                ctx.stroke();
+            }
+
+            strokeCount++;
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const progress = Math.min((strokeCount / targetStrokes) * 100, 100);
+            document.getElementById('progressIndicator').textContent = 
+                `✨ ${Math.round(progress)}% complete`;
+
+            if (progress >= 100) {
+                setTimeout(showCompletion, 500);
+            }
+        }
+
+        function showCompletion() {
+            document.getElementById('completionOverlay').classList.add('visible');
+            
+            // Create particle effect
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => createParticle(), i * 100);
+            }
+        }
+
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = '100%';
+            particle.style.animationDelay = Math.random() * 2 + 's';
+            document.body.appendChild(particle);
+            
+            setTimeout(() => particle.remove(), 3000);
+        }
+
+        function hideUIElements() {
+            clearTimeout(hideUITimeout);
+            hideUITimeout = setTimeout(() => {
+                document.getElementById('topBar').classList.add('hidden');
+                document.getElementById('bottomControls').classList.add('hidden');
+                document.getElementById('progressIndicator').classList.add('hidden');
+            }, 3000);
+        }
+
+        function showUIElements() {
+            document.getElementById('topBar').classList.remove('hidden');
+            document.getElementById('bottomControls').classList.remove('hidden');
+            document.getElementById('progressIndicator').classList.remove('hidden');
+            hideUIElements();
+        }
+
+        function populateLevelMenu() {
+            const container = document.getElementById('levelCardsContainer');
+            levels.forEach((level, idx) => {
+                const card = document.createElement('div');
+                card.className = 'level-card-lake';
+                if (idx > 0) card.classList.add('locked');
+                
+                card.innerHTML = `
+                    <div class="level-card-top">
+                        <div class="level-emoji-large">${level.emoji}</div>
+                        <div class="level-info">
+                            <div class="level-name">${level.name}</div>
+                            <div class="level-difficulty">${level.difficulty}</div>
+                        </div>
+                    </div>
+                    <div class="level-description">${level.desc}</div>
+                `;
+                
+                if (idx === 0) {
+                    card.addEventListener('click', () => {
+                        document.getElementById('levelMenu').classList.remove('visible');
+                    });
+                }
+                
+                container.appendChild(card);
+            });
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawStroke(x, y);
+            showUIElements();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawStroke(x, y);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+            drawStroke(x, y);
+            showUIElements();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+            drawStroke(x, y);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isDrawing = false;
+        });
+
+        document.getElementById('dismissGuide').addEventListener('click', () => {
+            document.getElementById('guideCard').classList.add('dismissed');
+            setTimeout(() => {
+                document.getElementById('guideCard').style.display = 'none';
+            }, 400);
+        });
+
+        document.getElementById('brushBtn').addEventListener('click', () => {
+            const panel = document.getElementById('brushPanel');
+            panel.classList.toggle('visible');
+        });
+
+        document.querySelectorAll('.brush-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.brush-option').forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+                currentBrush = this.dataset.brush;
+                document.getElementById('brushPanel').classList.remove('visible');
+            });
+        });
+
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            strokeCount = Math.max(0, strokeCount - 10);
+            updateProgress();
+            drawInitialGuide();
+        });
+
+        document.getElementById('menuBtn').addEventListener('click', () => {
+            document.getElementById('levelMenu').classList.add('visible');
+        });
+
+        document.getElementById('closeMenuBtn').addEventListener('click', () => {
+            document.getElementById('levelMenu').classList.remove('visible');
+        });
+
+        document.getElementById('continueBtn').addEventListener('click', () => {
+            document.getElementById('completionOverlay').classList.remove('visible');
+            document.getElementById('levelMenu').classList.add('visible');
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            document.querySelectorAll('[data-preview]').forEach(canvas => {
+                drawBrushPreview(canvas, canvas.dataset.preview);
+            });
+            populateLevelMenu();
+            hideUIElements();
+        });
+
+        window.addEventListener('resize', setupCanvas);
+    </script>
+</body>
+</html>

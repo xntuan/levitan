@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hatching Practice - Mobile</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            overflow: hidden;
+            height: 100vh;
+            touch-action: none;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: white;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .level-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin: 0 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .score {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            touch-action: none;
+        }
+
+        .guide-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .instruction-box {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 80%;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .instruction-box h3 {
+            font-size: 16px;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .instruction-box p {
+            font-size: 14px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .bottom-controls {
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            padding: 12px;
+        }
+
+        .brush-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            padding: 4px 0;
+        }
+
+        .brush-btn {
+            min-width: 70px;
+            padding: 8px 12px;
+            background: #f5f5f5;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .brush-btn.active {
+            background: #e8eaf6;
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .hint-btn {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .hint-btn:active {
+            background: #ffe69c;
+        }
+
+        .check-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .check-btn:active {
+            opacity: 0.8;
+        }
+
+        .undo-btn {
+            background: #f5f5f5;
+            color: #666;
+            flex: 0.5;
+        }
+
+        .undo-btn:active {
+            background: #e0e0e0;
+        }
+
+        .level-selector {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .level-selector.hidden {
+            display: none;
+        }
+
+        .level-grid {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .level-grid h2 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .level-cards {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .level-card {
+            padding: 16px;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .level-card:active {
+            transform: scale(0.98);
+        }
+
+        .level-card.locked {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .level-card.completed {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .level-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .level-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .level-icon {
+            font-size: 24px;
+        }
+
+        .level-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .hint-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .completion-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .completion-modal.hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .completion-card {
+            background: white;
+            border-radius: 20px;
+            padding: 32px 24px;
+            text-align: center;
+            max-width: 320px;
+            animation: scaleIn 0.3s ease;
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .completion-emoji {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .completion-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .completion-score {
+            font-size: 48px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .completion-btns {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .completion-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .next-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .menu-btn {
+            background: #f5f5f5;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="level-badge" id="levelBadge">Level 1</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="score" id="scoreDisplay">0%</div>
+        </div>
+
+        <div class="canvas-area">
+            <canvas id="drawCanvas"></canvas>
+            <canvas id="guideCanvas" class="hint-overlay"></canvas>
+            
+            <div class="guide-overlay" id="instructionOverlay">
+                <div class="instruction-box">
+                    <h3>Bắt đầu thôi! 🎨</h3>
+                    <p id="instructionText">Chạm và kéo để vẽ hatching strokes theo hướng mũi tên</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-controls">
+            <div class="brush-selector">
+                <button class="brush-btn active" data-brush="parallel">Parallel</button>
+                <button class="brush-btn" data-brush="cross">Cross</button>
+                <button class="brush-btn" data-brush="contour">Contour</button>
+                <button class="brush-btn" data-brush="stipple">Dots</button>
+            </div>
+            
+            <div class="action-row">
+                <button class="action-btn undo-btn" id="undoBtn">↶ Undo</button>
+                <button class="action-btn hint-btn" id="hintBtn">💡 Hint</button>
+                <button class="action-btn check-btn" id="checkBtn">✓ Check</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="level-selector hidden" id="levelSelector">
+        <div class="level-grid">
+            <h2>Choose Your Level</h2>
+            <div class="level-cards" id="levelCards"></div>
+        </div>
+    </div>
+
+    <div class="completion-modal hidden" id="completionModal">
+        <div class="completion-card">
+            <div class="completion-emoji">🎉</div>
+            <div class="completion-title">Excellent!</div>
+            <div class="completion-score" id="finalScore">95%</div>
+            <p style="color: #666; margin-bottom: 8px;">Great shading technique!</p>
+            <div class="completion-btns">
+                <button class="completion-btn menu-btn" id="menuBtn">Menu</button>
+                <button class="completion-btn next-btn" id="nextBtn">Next Level</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const drawCanvas = document.getElementById('drawCanvas');
+        const guideCanvas = document.getElementById('guideCanvas');
+        const drawCtx = drawCanvas.getContext('2d');
+        const guideCtx = guideCanvas.getContext('2d');
+
+        let currentLevel = 0;
+        let currentBrush = 'parallel';
+        let isDrawing = false;
+        let strokes = [];
+        let completedAreas = new Set();
+        let hintShown = false;
+
+        const levels = [
+            {
+                id: 0,
+                title: "Level 1: Simple Sphere",
+                desc: "Học basic shading với light source. Follow hướng mũi tên.",
+                icon: "🔵",
+                object: "sphere",
+                difficulty: "easy",
+                areas: [
+                    { id: 1, zone: "highlight", hint: "Để trống hoặc rất nhẹ" },
+                    { id: 2, zone: "midtone", hint: "Parallel hatching nhẹ nhàng" },
+                    { id: 3, zone: "shadow", hint: "Cross-hatch để tạo dark tone" },
+                    { id: 4, zone: "cast-shadow", hint: "Darkest area - nhiều layers" }
+                ],
+                instructions: "Vẽ theo số thứ tự: 1 → 2 → 3 → 4"
+            },
+            {
+                id: 1,
+                title: "Level 2: Simple Cube",
+                desc: "Practice sharp edges và different planes với light direction.",
+                icon: "📦",
+                object: "cube",
+                difficulty: "easy",
+                areas: [
+                    { id: 1, zone: "light-plane", hint: "Lightest face - minimal strokes" },
+                    { id: 2, zone: "mid-plane", hint: "Medium tone hatching" },
+                    { id: 3, zone: "dark-plane", hint: "Darkest face - cross-hatch" }
+                ],
+                instructions: "Mỗi mặt một tone khác nhau"
+            },
+            {
+                id: 2,
+                title: "Level 3: Apple",
+                desc: "Round form với stem và subtle color variations.",
+                icon: "🍎",
+                object: "apple",
+                difficulty: "medium",
+                areas: [
+                    { id: 1, zone: "highlight", hint: "Top highlight area" },
+                    { id: 2, zone: "body", hint: "Contour hatching theo form" },
+                    { id: 3, zone: "bottom", hint: "Darker bottom area" },
+                    { id: 4, zone: "stem", hint: "Dark stem với texture" }
+                ],
+                instructions: "Follow the curved form của apple"
+            },
+            {
+                id: 3,
+                title: "Level 4: Rock",
+                desc: "Irregular surface với cracks và texture variations.",
+                icon: "🪨",
+                object: "rock",
+                difficulty: "medium",
+                areas: [
+                    { id: 1, zone: "top-planes", hint: "Light top surfaces" },
+                    { id: 2, zone: "cracks", hint: "Dark cracks - sharp lines" },
+                    { id: 3, zone: "texture", hint: "Random stippling for texture" },
+                    { id: 4, zone: "shadow", hint: "Bottom shadow areas" }
+                ],
+                instructions: "Mix different techniques cho realistic rock"
+            },
+            {
+                id: 4,
+                title: "Level 5: Leaf",
+                desc: "Organic form với veins và natural texture.",
+                icon: "🍃",
+                object: "leaf",
+                difficulty: "medium",
+                areas: [
+                    { id: 1, zone: "center-vein", hint: "Dark center vein" },
+                    { id: 2, zone: "left-side", hint: "Contour từ vein ra edge" },
+                    { id: 3, zone: "right-side", hint: "Mirror the left side" },
+                    { id: 4, zone: "edges", hint: "Darker edges cho depth" }
+                ],
+                instructions: "Veins và contour là key"
+            },
+            {
+                id: 5,
+                title: "Level 6: Hand (Palm)",
+                desc: "Complex organic form với finger segments và palm lines.",
+                icon: "✋",
+                object: "hand",
+                difficulty: "hard",
+                areas: [
+                    { id: 1, zone: "knuckles", hint: "Light highlights on knuckles" },
+                    { id: 2, zone: "finger-sides", hint: "Contour hatching" },
+                    { id: 3, zone: "between-fingers", hint: "Dark shadows between" },
+                    { id: 4, zone: "palm", hint: "Lighter palm area" },
+                    { id: 5, zone: "wrist", hint: "Darker wrist shadow" }
+                ],
+                instructions: "Follow anatomy - pay attention to form"
+            }
+        ];
+
+        let unlockedLevels = [0]; // Start với level 1
+
+        function setupCanvas() {
+            const container = document.querySelector('.canvas-area');
+            const size = Math.min(container.clientWidth, container.clientHeight) - 40;
+            
+            drawCanvas.width = size;
+            drawCanvas.height = size;
+            guideCanvas.width = size;
+            guideCanvas.height = size;
+            
+            guideCanvas.style.width = size + 'px';
+            guideCanvas.style.height = size + 'px';
+        }
+
+        function drawObjectGuide() {
+            const level = levels[currentLevel];
+            const cx = drawCanvas.width / 2;
+            const cy = drawCanvas.height / 2;
+            const size = drawCanvas.width * 0.3;
+
+            drawCtx.strokeStyle = '#bdc3c7';
+            drawCtx.lineWidth = 2;
+            drawCtx.setLineDash([5, 5]);
+
+            switch(level.object) {
+                case 'sphere':
+                    // Main sphere
+                    drawCtx.beginPath();
+                    drawCtx.arc(cx, cy, size, 0, Math.PI * 2);
+                    drawCtx.stroke();
+                    
+                    // Zone indicators with numbers
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 24px sans-serif';
+                    drawCtx.setLineDash([]);
+                    
+                    // Highlight (top-left)
+                    drawCtx.fillText('1', cx - size * 0.4, cy - size * 0.4);
+                    
+                    // Midtone (middle)
+                    drawCtx.fillText('2', cx + size * 0.3, cy);
+                    
+                    // Core shadow (opposite of light)
+                    drawCtx.fillText('3', cx + size * 0.5, cy + size * 0.5);
+                    
+                    // Cast shadow
+                    drawCtx.fillText('4', cx - size * 0.3, cy + size * 1.2);
+                    
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+
+                case 'cube':
+                    // Isometric cube
+                    drawCtx.beginPath();
+                    // Top face
+                    drawCtx.moveTo(cx, cy - size * 0.8);
+                    drawCtx.lineTo(cx + size * 0.8, cy - size * 0.3);
+                    drawCtx.lineTo(cx + size * 0.8, cy + size * 0.7);
+                    drawCtx.lineTo(cx, cy + size * 1.2);
+                    drawCtx.lineTo(cx - size * 0.8, cy + size * 0.7);
+                    drawCtx.lineTo(cx - size * 0.8, cy - size * 0.3);
+                    drawCtx.closePath();
+                    drawCtx.stroke();
+                    
+                    // Internal lines
+                    drawCtx.moveTo(cx, cy - size * 0.8);
+                    drawCtx.lineTo(cx, cy + size * 0.2);
+                    drawCtx.stroke();
+                    drawCtx.moveTo(cx + size * 0.8, cy - size * 0.3);
+                    drawCtx.lineTo(cx, cy + size * 0.2);
+                    drawCtx.stroke();
+                    
+                    // Numbers
+                    drawCtx.setLineDash([]);
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 24px sans-serif';
+                    drawCtx.fillText('1', cx - size * 0.5, cy - size * 0.1); // Left (light)
+                    drawCtx.fillText('2', cx + size * 0.3, cy + size * 0.2); // Right
+                    drawCtx.fillText('3', cx - size * 0.2, cy + size * 0.8); // Bottom
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+
+                case 'apple':
+                    // Apple body
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(cx, cy - size * 0.9);
+                    drawCtx.bezierCurveTo(cx - size * 0.9, cy - size * 0.9, cx - size, cy + size * 0.3, cx, cy + size);
+                    drawCtx.bezierCurveTo(cx + size, cy + size * 0.3, cx + size * 0.9, cy - size * 0.9, cx, cy - size * 0.9);
+                    drawCtx.stroke();
+                    
+                    // Stem
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(cx, cy - size * 0.9);
+                    drawCtx.quadraticCurveTo(cx + size * 0.1, cy - size * 1.1, cx + size * 0.2, cy - size * 1.2);
+                    drawCtx.stroke();
+                    
+                    // Numbers
+                    drawCtx.setLineDash([]);
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 24px sans-serif';
+                    drawCtx.fillText('1', cx - size * 0.3, cy - size * 0.5);
+                    drawCtx.fillText('2', cx + size * 0.3, cy);
+                    drawCtx.fillText('3', cx, cy + size * 0.7);
+                    drawCtx.fillText('4', cx + size * 0.1, cy - size);
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+
+                case 'rock':
+                    // Irregular rock shape
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(cx - size * 0.9, cy + size * 0.6);
+                    drawCtx.lineTo(cx - size * 0.6, cy - size * 0.5);
+                    drawCtx.lineTo(cx - size * 0.1, cy - size * 0.8);
+                    drawCtx.lineTo(cx + size * 0.5, cy - size * 0.6);
+                    drawCtx.lineTo(cx + size * 0.8, cy - size * 0.1);
+                    drawCtx.lineTo(cx + size * 0.9, cy + size * 0.5);
+                    drawCtx.lineTo(cx + size * 0.3, cy + size * 0.8);
+                    drawCtx.lineTo(cx - size * 0.4, cy + size * 0.7);
+                    drawCtx.closePath();
+                    drawCtx.stroke();
+                    
+                    // Cracks
+                    drawCtx.moveTo(cx - size * 0.3, cy - size * 0.6);
+                    drawCtx.lineTo(cx + size * 0.2, cy + size * 0.3);
+                    drawCtx.stroke();
+                    
+                    drawCtx.setLineDash([]);
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 20px sans-serif';
+                    drawCtx.fillText('1', cx - size * 0.2, cy - size * 0.4);
+                    drawCtx.fillText('2', cx + size * 0.1, cy + size * 0.1);
+                    drawCtx.fillText('3', cx + size * 0.5, cy + size * 0.2);
+                    drawCtx.fillText('4', cx - size * 0.2, cy + size * 0.5);
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+
+                case 'leaf':
+                    // Leaf outline
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(cx, cy - size);
+                    drawCtx.bezierCurveTo(cx + size * 0.7, cy - size * 0.7, cx + size * 0.9, cy, cx + size * 0.5, cy + size * 0.7);
+                    drawCtx.bezierCurveTo(cx + size * 0.3, cy + size * 0.9, cx, cy + size, cx, cy + size);
+                    drawCtx.bezierCurveTo(cx, cy + size, cx - size * 0.3, cy + size * 0.9, cx - size * 0.5, cy + size * 0.7);
+                    drawCtx.bezierCurveTo(cx - size * 0.9, cy, cx - size * 0.7, cy - size * 0.7, cx, cy - size);
+                    drawCtx.stroke();
+                    
+                    // Center vein
+                    drawCtx.moveTo(cx, cy - size);
+                    drawCtx.lineTo(cx, cy + size);
+                    drawCtx.stroke();
+                    
+                    // Side veins
+                    for (let i = 0; i < 4; i++) {
+                        const y = cy - size * 0.6 + i * size * 0.4;
+                        drawCtx.moveTo(cx, y);
+                        drawCtx.lineTo(cx + size * 0.4, y + size * 0.2);
+                        drawCtx.stroke();
+                        drawCtx.moveTo(cx, y);
+                        drawCtx.lineTo(cx - size * 0.4, y + size * 0.2);
+                        drawCtx.stroke();
+                    }
+                    
+                    drawCtx.setLineDash([]);
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 20px sans-serif';
+                    drawCtx.fillText('1', cx + size * 0.1, cy);
+                    drawCtx.fillText('2', cx - size * 0.5, cy);
+                    drawCtx.fillText('3', cx + size * 0.5, cy);
+                    drawCtx.fillText('4', cx, cy + size * 0.7);
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+
+                case 'hand':
+                    // Simplified hand palm view
+                    drawCtx.beginPath();
+                    // Palm outline
+                    drawCtx.moveTo(cx, cy + size * 0.8);
+                    drawCtx.lineTo(cx - size * 0.3, cy + size * 0.4);
+                    
+                    // Thumb
+                    drawCtx.lineTo(cx - size * 0.4, cy - size * 0.2);
+                    drawCtx.lineTo(cx - size * 0.2, cy - size * 0.7);
+                    drawCtx.lineTo(cx, cy - size * 0.8);
+                    drawCtx.lineTo(cx + size * 0.2, cy - size * 0.7);
+                    
+                    // Fingers
+                    drawCtx.lineTo(cx + size * 0.25, cy - size * 0.9);
+                    drawCtx.lineTo(cx + size * 0.4, cy - size * 0.8);
+                    drawCtx.lineTo(cx + size * 0.5, cy - size * 0.9);
+                    drawCtx.lineTo(cx + size * 0.6, cy - size * 0.7);
+                    drawCtx.lineTo(cx + size * 0.55, cy - size * 0.5);
+                    
+                    drawCtx.lineTo(cx + size * 0.5, cy - size * 0.3);
+                    drawCtx.lineTo(cx + size * 0.3, cy + size * 0.4);
+                    drawCtx.lineTo(cx, cy + size * 0.8);
+                    drawCtx.stroke();
+                    
+                    drawCtx.setLineDash([]);
+                    drawCtx.fillStyle = '#667eea';
+                    drawCtx.font = 'bold 18px sans-serif';
+                    drawCtx.fillText('1', cx, cy - size * 0.6);
+                    drawCtx.fillText('2', cx - size * 0.2, cy - size * 0.3);
+                    drawCtx.fillText('3', cx + size * 0.3, cy - size * 0.5);
+                    drawCtx.fillText('4', cx, cy + size * 0.2);
+                    drawCtx.fillText('5', cx, cy + size * 0.6);
+                    drawCtx.setLineDash([5, 5]);
+                    break;
+            }
+
+            drawCtx.setLineDash([]);
+        }
+
+        function drawDirectionalHints() {
+            if (!hintShown) return;
+
+            const level = levels[currentLevel];
+            const cx = guideCanvas.width / 2;
+            const cy = guideCanvas.height / 2;
+            const size = guideCanvas.width * 0.3;
+
+            guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+            guideCtx.strokeStyle = 'rgba(102, 126, 234, 0.6)';
+            guideCtx.fillStyle = 'rgba(102, 126, 234, 0.6)';
+            guideCtx.lineWidth = 2;
+
+            // Draw directional arrows based on object type
+            switch(level.object) {
+                case 'sphere':
+                    // Contour lines showing form
+                    for (let i = 0; i < 5; i++) {
+                        guideCtx.beginPath();
+                        guideCtx.arc(cx, cy, size * 0.3 + i * size * 0.15, 0, Math.PI * 2);
+                        guideCtx.stroke();
+                    }
+                    
+                    // Light direction arrow
+                    drawArrow(guideCtx, cx - size * 1.2, cy - size * 1.2, cx - size * 0.5, cy - size * 0.5);
+                    break;
+
+                case 'cube':
+                    // Arrows showing stroke directions for each plane
+                    drawParallelLines(guideCtx, cx - size * 0.4, cy, 40, 3, -30);
+                    drawParallelLines(guideCtx, cx + size * 0.4, cy + size * 0.3, 40, 3, 30);
+                    drawParallelLines(guideCtx, cx, cy + size * 0.7, 40, 3, 0);
+                    break;
+
+                case 'apple':
+                case 'leaf':
+                    // Contour-following curves
+                    for (let i = 0; i < 4; i++) {
+                        guideCtx.beginPath();
+                        guideCtx.arc(cx, cy, size * 0.2 + i * size * 0.2, 0, Math.PI * 2);
+                        guideCtx.stroke();
+                    }
+                    break;
+
+                case 'rock':
+                    // Random directional hatching for texture
+                    for (let i = 0; i < 6; i++) {
+                        const x = cx + (Math.random() - 0.5) * size * 1.5;
+                        const y = cy + (Math.random() - 0.5) * size * 1.5;
+                        const angle = Math.random() * 180;
+                        drawParallelLines(guideCtx, x, y, 30, 2, angle);
+                    }
+                    break;
+
+                case 'hand':
+                    // Contour lines following finger forms
+                    drawContourLines(guideCtx, cx, cy - size * 0.7, 40, 3);
+                    drawContourLines(guideCtx, cx - size * 0.3, cy - size * 0.3, 35, 3);
+                    drawContourLines(guideCtx, cx + size * 0.4, cy - size * 0.4, 35, 3);
+                    break;
+            }
+        }
+
+        function drawArrow(ctx, x1, y1, x2, y2) {
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            // Arrowhead
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 15 * Math.cos(angle - Math.PI / 6), y2 - 15 * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 15 * Math.cos(angle + Math.PI / 6), y2 - 15 * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+        }
+
+        function drawParallelLines(ctx, x, y, length, count, angle) {
+            const rad = angle * Math.PI / 180;
+            for (let i = 0; i < count; i++) {
+                const offset = (i - count/2) * 8;
+                const offsetX = offset * Math.cos(rad + Math.PI/2);
+                const offsetY = offset * Math.sin(rad + Math.PI/2);
+                
+                ctx.beginPath();
+                ctx.moveTo(x + offsetX - length/2 * Math.cos(rad), y + offsetY - length/2 * Math.sin(rad));
+                ctx.lineTo(x + offsetX + length/2 * Math.cos(rad), y + offsetY + length/2 * Math.sin(rad));
+                ctx.stroke();
+            }
+        }
+
+        function drawContourLines(ctx, x, y, size, count) {
+            for (let i = 0; i < count; i++) {
+                ctx.beginPath();
+                ctx.arc(x, y, 10 + i * 10, 0, Math.PI);
+                ctx.stroke();
+            }
+        }
+
+        function loadLevel(levelId) {
+            currentLevel = levelId;
+            const level = levels[levelId];
+            
+            document.getElementById('levelBadge').textContent = level.title;
+            document.getElementById('instructionText').textContent = level.instructions;
+            
+            completedAreas.clear();
+            strokes = [];
+            hintShown = false;
+            
+            drawCtx.fillStyle = 'white';
+            drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+            drawObjectGuide();
+            
+            guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+            
+            updateProgress();
+            
+            // Hide instruction after 3 seconds
+            setTimeout(() => {
+                document.getElementById('instructionOverlay').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('instructionOverlay').style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+
+        function updateProgress() {
+            const level = levels[currentLevel];
+            const progress = (completedAreas.size / level.areas.length) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('scoreDisplay').textContent = Math.round(progress) + '%';
+        }
+
+        function checkCompletion() {
+            const level = levels[currentLevel];
+            const coverage = (completedAreas.size / level.areas.length) * 100;
+            
+            if (coverage >= 75) {
+                // Show completion modal
+                document.getElementById('finalScore').textContent = Math.round(coverage) + '%';
+                document.getElementById('completionModal').classList.remove('hidden');
+                
+                // Unlock next level
+                if (currentLevel < levels.length - 1 && !unlockedLevels.includes(currentLevel + 1)) {
+                    unlockedLevels.push(currentLevel + 1);
+                }
+            } else {
+                alert(`Keep going! You're at ${Math.round(coverage)}%. Try to reach 75%!`);
+            }
+        }
+
+        function showLevelSelector() {
+            const container = document.getElementById('levelCards');
+            container.innerHTML = '';
+            
+            levels.forEach((level, idx) => {
+                const card = document.createElement('div');
+                card.className = 'level-card';
+                
+                if (!unlockedLevels.includes(idx)) {
+                    card.classList.add('locked');
+                }
+                
+                if (idx < currentLevel) {
+                    card.classList.add('completed');
+                }
+                
+                card.innerHTML = `
+                    <div class="level-card-header">
+                        <div class="level-title">${level.title}</div>
+                        <div class="level-icon">${level.icon}</div>
+                    </div>
+                    <div class="level-desc">${level.desc}</div>
+                `;
+                
+                if (unlockedLevels.includes(idx)) {
+                    card.addEventListener('click', () => {
+                        document.getElementById('levelSelector').classList.add('hidden');
+                        loadLevel(idx);
+                    });
+                }
+                
+                container.appendChild(card);
+            });
+            
+            document.getElementById('levelSelector').classList.remove('hidden');
+        }
+
+        // Touch/Mouse drawing
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            // Simulate completing areas (in real app, would check actual coverage)
+            const areaId = Math.floor(Math.random() * levels[currentLevel].areas.length) + 1;
+            if (Math.random() > 0.7) {
+                completedAreas.add(areaId);
+                updateProgress();
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            // Simple hatching effect
+            drawCtx.strokeStyle = 'rgba(44, 62, 80, 0.6)';
+            drawCtx.lineWidth = 1;
+            drawCtx.lineCap = 'round';
+            
+            for (let i = -10; i < 10; i += 4) {
+                drawCtx.beginPath();
+                drawCtx.moveTo(x + i, y - 10);
+                drawCtx.lineTo(x + i, y + 10);
+                drawCtx.stroke();
+            }
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // Event listeners
+        drawCanvas.addEventListener('mousedown', startDrawing);
+        drawCanvas.addEventListener('mousemove', draw);
+        drawCanvas.addEventListener('mouseup', stopDrawing);
+        drawCanvas.addEventListener('mouseleave', stopDrawing);
+
+        drawCanvas.addEventListener('touchstart', startDrawing);
+        drawCanvas.addEventListener('touchmove', draw);
+        drawCanvas.addEventListener('touchend', stopDrawing);
+
+        document.querySelectorAll('.brush-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentBrush = this.dataset.brush;
+            });
+        });
+
+        document.getElementById('hintBtn').addEventListener('click', () => {
+            hintShown = !hintShown;
+            if (hintShown) {
+                drawDirectionalHints();
+                document.getElementById('hintBtn').textContent = '👁️ Hide';
+            } else {
+                guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+                document.getElementById('hintBtn').textContent = '💡 Hint';
+            }
+        });
+
+        document.getElementById('checkBtn').addEventListener('click', checkCompletion);
+
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            drawCtx.fillStyle = 'white';
+            drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+            drawObjectGuide();
+        });
+
+        document.getElementById('menuBtn').addEventListener('click', () => {
+            document.getElementById('completionModal').classList.add('hidden');
+            showLevelSelector();
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            document.getElementById('completionModal').classList.add('hidden');
+            if (currentLevel < levels.length - 1) {
+                loadLevel(currentLevel + 1);
+            } else {
+                alert('🎉 Congratulations! Bạn đã hoàn thành tất cả levels!');
+                showLevelSelector();
+            }
+        });
+
+        document.getElementById('levelBadge').addEventListener('click', showLevelSelector);
+
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            loadLevel(0);
+        });
+
+        window.addEventListener('resize', setupCanvas);
+    </script>
+</body>
+</html>

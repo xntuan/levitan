@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pattern - Meditative Hatching</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            overflow: hidden;
+            height: 100vh;
+            touch-action: none;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-bar {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+        }
+
+        .artwork-title {
+            font-size: 18px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.95);
+            letter-spacing: 1px;
+        }
+
+        .progress-badge {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            background: white;
+            touch-action: none;
+        }
+
+        .zone-info-card {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 16px 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .zone-info-card.hidden {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-10px);
+        }
+
+        .pattern-preview-mini {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+        }
+
+        .zone-instruction {
+            font-size: 14px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .pattern-selector {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .pattern-btn {
+            width: 60px;
+            height: 70px;
+            border-radius: 16px;
+            background: white;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+        }
+
+        .pattern-btn:active {
+            transform: scale(0.95);
+        }
+
+        .pattern-btn.active {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+
+        .pattern-btn.completed {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .pattern-btn.completed::after {
+            content: '✓';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #4caf50;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pattern-preview {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+        }
+
+        .pattern-label {
+            font-size: 10px;
+            color: #999;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .zone-number {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        .hint-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .hint-overlay.visible {
+            opacity: 1;
+        }
+
+        .floating-hint {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 12px 20px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #666;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-10px); }
+        }
+
+        .completion-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.96) 0%, rgba(118, 75, 162, 0.96) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 100;
+        }
+
+        .completion-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .artwork-preview {
+            width: 280px;
+            height: 280px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+            animation: zoomIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes zoomIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .completion-text {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .completion-title {
+            font-size: 32px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .completion-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .completion-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .completion-btn {
+            padding: 14px 32px;
+            border-radius: 24px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .share-btn {
+            background: white;
+            color: #667eea;
+        }
+
+        .next-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .completion-btn:active {
+            transform: scale(0.95);
+        }
+
+        .guide-toast {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 12px 20px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #666;
+            text-align: center;
+            max-width: 80%;
+            opacity: 0;
+            animation: toastIn 4s ease forwards;
+        }
+
+        @keyframes toastIn {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            90% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-bar">
+            <div class="artwork-title">Peaceful Mountain</div>
+            <div class="progress-badge"><span id="progressText">0/6</span> complete</div>
+        </div>
+
+        <div class="canvas-area">
+            <canvas id="artCanvas"></canvas>
+            <canvas id="hintCanvas" class="hint-overlay"></canvas>
+            
+            <div class="zone-info-card hidden" id="zoneInfo">
+                <canvas class="pattern-preview-mini" id="currentPatternPreview"></canvas>
+                <div class="zone-instruction">Tap zone <strong id="zoneLabel">1</strong> to fill</div>
+            </div>
+
+            <div class="guide-toast" id="guideToast">
+                Tap any numbered zone to start 🎨
+            </div>
+
+            <div class="pattern-selector">
+                <div class="pattern-btn active" data-zone="1">
+                    <canvas class="pattern-preview" data-preview="1"></canvas>
+                    <div class="pattern-label">Zone 1</div>
+                    <div class="zone-number">1</div>
+                </div>
+                <div class="pattern-btn" data-zone="2">
+                    <canvas class="pattern-preview" data-preview="2"></canvas>
+                    <div class="pattern-label">Zone 2</div>
+                    <div class="zone-number">2</div>
+                </div>
+                <div class="pattern-btn" data-zone="3">
+                    <canvas class="pattern-preview" data-preview="3"></canvas>
+                    <div class="pattern-label">Zone 3</div>
+                    <div class="zone-number">3</div>
+                </div>
+                <div class="pattern-btn" data-zone="4">
+                    <canvas class="pattern-preview" data-preview="4"></canvas>
+                    <div class="pattern-label">Zone 4</div>
+                    <div class="zone-number">4</div>
+                </div>
+            </div>
+
+            <div class="floating-hint" id="floatingHint">
+                👆 Tap zone 1 to begin
+            </div>
+        </div>
+    </div>
+
+    <div class="completion-overlay" id="completionOverlay">
+        <canvas class="artwork-preview" id="finalArtwork"></canvas>
+        <div class="completion-text">
+            <div class="completion-title">Beautiful</div>
+            <div class="completion-subtitle">You completed "Peaceful Mountain"</div>
+        </div>
+        <div class="completion-buttons">
+            <button class="completion-btn share-btn">Share</button>
+            <button class="completion-btn next-btn">Next Artwork</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('artCanvas');
+        const hintCanvas = document.getElementById('hintCanvas');
+        const ctx = canvas.getContext('2d');
+        const hintCtx = hintCanvas.getContext('2d');
+
+        let currentZone = 1;
+        let completedZones = new Set();
+        const totalZones = 4;
+        let isDrawing = false;
+
+        // Pattern definitions - each zone has specific pattern
+        const zonePatterns = {
+            1: { type: 'lines', angle: 45, spacing: 4, color: '#667eea', name: 'Sky' },
+            2: { type: 'cross', angle: 0, spacing: 5, color: '#764ba2', name: 'Mountain' },
+            3: { type: 'dots', spacing: 6, color: '#48c6ef', name: 'Water' },
+            4: { type: 'waves', spacing: 8, color: '#6f86d6', name: 'Forest' }
+        };
+
+        // Zone definitions - simplified mountain scene
+        const zones = {
+            1: { // Sky
+                bounds: { x: 0, y: 0, w: 1, h: 0.4 },
+                label: 'Sky',
+                guide: 'Diagonal lines for texture'
+            },
+            2: { // Mountain
+                bounds: { x: 0.2, y: 0.2, w: 0.6, h: 0.4 },
+                label: 'Mountain Peak',
+                guide: 'Cross-hatch for depth'
+            },
+            3: { // Water
+                bounds: { x: 0, y: 0.7, w: 1, h: 0.3 },
+                label: 'Water',
+                guide: 'Dots for reflection'
+            },
+            4: { // Trees
+                bounds: { x: 0, y: 0.5, w: 0.3, h: 0.3 },
+                label: 'Forest',
+                guide: 'Waves for foliage'
+            }
+        };
+
+        function setupCanvas() {
+            const container = document.querySelector('.canvas-area');
+            const size = Math.min(container.clientWidth, container.clientHeight) * 0.85;
+            
+            canvas.width = size;
+            canvas.height = size;
+            hintCanvas.width = size;
+            hintCanvas.height = size;
+            
+            hintCanvas.style.width = size + 'px';
+            hintCanvas.style.height = size + 'px';
+            
+            drawBaseArtwork();
+            drawAllZoneNumbers();
+            updatePatternPreviews();
+        }
+
+        function drawBaseArtwork() {
+            // White background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw zone outlines with numbers
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 4]);
+
+            // Sky zone
+            ctx.strokeRect(0, 0, canvas.width, canvas.height * 0.4);
+            
+            // Mountain
+            ctx.beginPath();
+            ctx.moveTo(canvas.width * 0.2, canvas.height * 0.6);
+            ctx.lineTo(canvas.width * 0.5, canvas.height * 0.2);
+            ctx.lineTo(canvas.width * 0.8, canvas.height * 0.6);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Water
+            ctx.strokeRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
+
+            // Trees
+            for (let i = 0; i < 3; i++) {
+                const x = canvas.width * (0.05 + i * 0.08);
+                const y = canvas.height * 0.5;
+                const w = canvas.width * 0.06;
+                const h = canvas.height * 0.2;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, y + h);
+                ctx.lineTo(x + w/2, y);
+                ctx.lineTo(x + w, y + h);
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            ctx.setLineDash([]);
+        }
+
+        function drawAllZoneNumbers() {
+            hintCtx.clearRect(0, 0, hintCanvas.width, hintCanvas.height);
+            hintCtx.font = 'bold 32px sans-serif';
+            hintCtx.textAlign = 'center';
+            hintCtx.textBaseline = 'middle';
+
+            // Draw numbers on zones
+            const positions = {
+                1: { x: 0.5, y: 0.2 },
+                2: { x: 0.5, y: 0.4 },
+                3: { x: 0.5, y: 0.85 },
+                4: { x: 0.15, y: 0.6 }
+            };
+
+            Object.entries(positions).forEach(([zone, pos]) => {
+                if (!completedZones.has(parseInt(zone))) {
+                    // Number circle background
+                    hintCtx.fillStyle = 'rgba(102, 126, 234, 0.9)';
+                    hintCtx.beginPath();
+                    hintCtx.arc(
+                        canvas.width * pos.x,
+                        canvas.height * pos.y,
+                        20,
+                        0,
+                        Math.PI * 2
+                    );
+                    hintCtx.fill();
+
+                    // Number text
+                    hintCtx.fillStyle = 'white';
+                    hintCtx.fillText(
+                        zone,
+                        canvas.width * pos.x,
+                        canvas.height * pos.y
+                    );
+                }
+            });
+        }
+
+        function drawPattern(type, x, y, w, h, config) {
+            ctx.save();
+            ctx.strokeStyle = config.color + '99'; // Semi-transparent
+            ctx.fillStyle = config.color + '99';
+            ctx.lineWidth = 1;
+
+            switch(type) {
+                case 'lines':
+                    const rad = config.angle * Math.PI / 180;
+                    for (let i = 0; i < w; i += config.spacing) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + i, y);
+                        ctx.lineTo(x + i, y + h);
+                        ctx.stroke();
+                    }
+                    break;
+
+                case 'cross':
+                    for (let i = 0; i < w; i += config.spacing) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + i, y);
+                        ctx.lineTo(x + i, y + h);
+                        ctx.stroke();
+                    }
+                    for (let i = 0; i < h; i += config.spacing) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + i);
+                        ctx.lineTo(x + w, y + i);
+                        ctx.stroke();
+                    }
+                    break;
+
+                case 'dots':
+                    for (let i = 0; i < w; i += config.spacing) {
+                        for (let j = 0; j < h; j += config.spacing) {
+                            ctx.beginPath();
+                            ctx.arc(x + i, y + j, 1.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                    break;
+
+                case 'waves':
+                    for (let j = 0; j < h; j += config.spacing) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + j);
+                        for (let i = 0; i < w; i += 10) {
+                            ctx.quadraticCurveTo(
+                                x + i + 5, y + j + 3,
+                                x + i + 10, y + j
+                            );
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+            }
+
+            ctx.restore();
+        }
+
+        function fillZone(zoneNum, touchX, touchY) {
+            const pattern = zonePatterns[zoneNum];
+            
+            // Fill specific areas based on zone
+            switch(zoneNum) {
+                case 1: // Sky
+                    drawPattern('lines', 0, 0, canvas.width, canvas.height * 0.4, pattern);
+                    break;
+                case 2: // Mountain
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(canvas.width * 0.2, canvas.height * 0.6);
+                    ctx.lineTo(canvas.width * 0.5, canvas.height * 0.2);
+                    ctx.lineTo(canvas.width * 0.8, canvas.height * 0.6);
+                    ctx.closePath();
+                    ctx.clip();
+                    drawPattern('cross', canvas.width * 0.2, canvas.height * 0.2,
+                               canvas.width * 0.6, canvas.height * 0.4, pattern);
+                    ctx.restore();
+                    break;
+                case 3: // Water
+                    drawPattern('dots', 0, canvas.height * 0.7,
+                               canvas.width, canvas.height * 0.3, pattern);
+                    break;
+                case 4: // Trees
+                    for (let i = 0; i < 3; i++) {
+                        ctx.save();
+                        const x = canvas.width * (0.05 + i * 0.08);
+                        const y = canvas.height * 0.5;
+                        const w = canvas.width * 0.06;
+                        const h = canvas.height * 0.2;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + h);
+                        ctx.lineTo(x + w/2, y);
+                        ctx.lineTo(x + w, y + h);
+                        ctx.closePath();
+                        ctx.clip();
+                        drawPattern('waves', x, y, w, h, pattern);
+                        ctx.restore();
+                    }
+                    break;
+            }
+
+            completedZones.add(zoneNum);
+            updateProgress();
+            drawAllZoneNumbers();
+
+            // Mark pattern button as completed
+            document.querySelector(`[data-zone="${zoneNum}"]`).classList.add('completed');
+
+            // Auto-advance to next zone
+            if (completedZones.size < totalZones) {
+                const nextZone = currentZone + 1;
+                if (nextZone <= totalZones && !completedZones.has(nextZone)) {
+                    selectZone(nextZone);
+                }
+            } else {
+                setTimeout(showCompletion, 800);
+            }
+        }
+
+        function selectZone(zoneNum) {
+            currentZone = zoneNum;
+            
+            // Update active button
+            document.querySelectorAll('.pattern-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-zone="${zoneNum}"]`).classList.add('active');
+
+            // Update zone info card
+            const pattern = zonePatterns[zoneNum];
+            document.getElementById('zoneLabel').textContent = zoneNum;
+            document.getElementById('zoneInfo').classList.remove('hidden');
+
+            // Update hint
+            document.getElementById('floatingHint').textContent = 
+                `👆 Tap zone ${zoneNum} (${pattern.name})`;
+        }
+
+        function updateProgress() {
+            document.getElementById('progressText').textContent = 
+                `${completedZones.size}/${totalZones}`;
+        }
+
+        function updatePatternPreviews() {
+            document.querySelectorAll('[data-preview]').forEach(canvas => {
+                const zone = canvas.dataset.preview;
+                const pattern = zonePatterns[zone];
+                
+                canvas.width = 44;
+                canvas.height = 44;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 44, 44);
+                
+                drawPattern(pattern.type, 4, 4, 36, 36, pattern);
+            });
+        }
+
+        function showCompletion() {
+            // Copy canvas to preview
+            const finalCanvas = document.getElementById('finalArtwork');
+            finalCanvas.width = canvas.width;
+            finalCanvas.height = canvas.height;
+            const finalCtx = finalCanvas.getContext('2d');
+            finalCtx.drawImage(canvas, 0, 0);
+
+            document.getElementById('completionOverlay').classList.add('visible');
+            document.getElementById('floatingHint').style.display = 'none';
+        }
+
+        // Touch handling
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Check if tap is in current zone area (simplified check)
+            if (!completedZones.has(currentZone)) {
+                fillZone(currentZone, x, y);
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+
+            if (!completedZones.has(currentZone)) {
+                fillZone(currentZone, x, y);
+            }
+        });
+
+        // Pattern button clicks
+        document.querySelectorAll('.pattern-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const zone = parseInt(this.dataset.zone);
+                if (!completedZones.has(zone)) {
+                    selectZone(zone);
+                }
+            });
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            selectZone(1);
+            
+            // Hide guide toast after animation
+            setTimeout(() => {
+                document.getElementById('guideToast').style.display = 'none';
+            }, 4000);
+        });
+
+        window.addEventListener('resize', setupCanvas);
+    </script>
+</body>
+</html>

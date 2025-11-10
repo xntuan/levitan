@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ink - Guided Hatching Art</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            overflow: hidden;
+            height: 100vh;
+            touch-action: none;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-bar {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+        }
+
+        .artwork-title {
+            font-size: 18px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.95);
+            letter-spacing: 1px;
+        }
+
+        .progress-badge {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        .canvas-stack {
+            position: relative;
+            max-width: 95%;
+            max-height: 95%;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        #guideCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        #drawCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: white;
+            touch-action: none;
+        }
+
+        .zone-highlight {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .zone-highlight.visible {
+            opacity: 1;
+        }
+
+        .active-zone-card {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 16px 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .active-zone-card.hidden {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-10px);
+            pointer-events: none;
+        }
+
+        .zone-pattern-preview {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+            background: white;
+        }
+
+        .zone-info-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .zone-number-badge {
+            font-size: 14px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .zone-instruction {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .toggle-guide-btn {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-guide-btn:active {
+            transform: scale(0.9);
+        }
+
+        .toggle-guide-btn.active {
+            background: #667eea;
+        }
+
+        .zone-selector {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 12px;
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .zone-btn {
+            width: 64px;
+            height: 70px;
+            border-radius: 16px;
+            background: white;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            position: relative;
+        }
+
+        .zone-btn:active {
+            transform: scale(0.95);
+        }
+
+        .zone-btn.active {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+
+        .zone-btn.completed {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .zone-btn.completed::after {
+            content: '✓';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #4caf50;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .zone-number {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .zone-name {
+            font-size: 10px;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .hint-toast {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 12px 20px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #666;
+            text-align: center;
+            max-width: 80%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .completion-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.96) 0%, rgba(118, 75, 162, 0.96) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 100;
+        }
+
+        .completion-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .artwork-final {
+            width: 280px;
+            height: 280px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+            animation: zoomIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+        }
+
+        @keyframes zoomIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .completion-text {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .completion-title {
+            font-size: 32px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .completion-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .completion-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .completion-btn {
+            padding: 14px 32px;
+            border-radius: 24px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .share-btn {
+            background: white;
+            color: #667eea;
+        }
+
+        .next-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .completion-btn:active {
+            transform: scale(0.95);
+        }
+
+        .guide-controls {
+            position: absolute;
+            bottom: 110px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-btn-small {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn-small:active {
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-bar">
+            <div class="artwork-title">Sunset Mountains</div>
+            <div class="progress-badge"><span id="progressText">0/4</span></div>
+        </div>
+
+        <div class="canvas-area">
+            <div class="canvas-stack">
+                <canvas id="baseCanvas"></canvas>
+                <canvas id="guideCanvas"></canvas>
+                <canvas id="drawCanvas"></canvas>
+                <canvas id="highlightCanvas" class="zone-highlight"></canvas>
+            </div>
+
+            <div class="active-zone-card" id="activeZoneCard">
+                <canvas class="zone-pattern-preview" id="activePatternPreview"></canvas>
+                <div class="zone-info-text">
+                    <div class="zone-number-badge">Zone <span id="activeZoneNum">1</span></div>
+                    <div class="zone-instruction" id="activeZoneInstruction">
+                        Draw diagonal lines following the guide arrows
+                    </div>
+                </div>
+            </div>
+
+            <button class="toggle-guide-btn active" id="toggleGuideBtn">👁️</button>
+
+            <div class="guide-controls">
+                <button class="control-btn-small" id="undoBtn">↶</button>
+                <button class="control-btn-small" id="clearZoneBtn">🗑️</button>
+            </div>
+
+            <div class="zone-selector">
+                <div class="zone-btn active" data-zone="1">
+                    <div class="zone-number">1</div>
+                    <div class="zone-name">Sky</div>
+                </div>
+                <div class="zone-btn" data-zone="2">
+                    <div class="zone-number">2</div>
+                    <div class="zone-name">Mountain</div>
+                </div>
+                <div class="zone-btn" data-zone="3">
+                    <div class="zone-number">3</div>
+                    <div class="zone-name">Water</div>
+                </div>
+                <div class="zone-btn" data-zone="4">
+                    <div class="zone-number">4</div>
+                    <div class="zone-name">Trees</div>
+                </div>
+            </div>
+
+            <div class="hint-toast" id="hintToast">
+                ✏️ Draw in zone 1 following the guide lines
+            </div>
+        </div>
+    </div>
+
+    <div class="completion-overlay" id="completionOverlay">
+        <canvas class="artwork-final" id="finalArtwork"></canvas>
+        <div class="completion-text">
+            <div class="completion-title">Masterpiece</div>
+            <div class="completion-subtitle">Beautiful work on "Sunset Mountains"</div>
+        </div>
+        <div class="completion-buttons">
+            <button class="completion-btn share-btn">Share</button>
+            <button class="completion-btn next-btn">Next Art</button>
+        </div>
+    </div>
+
+    <script>
+        const baseCanvas = document.getElementById('baseCanvas');
+        const guideCanvas = document.getElementById('guideCanvas');
+        const drawCanvas = document.getElementById('drawCanvas');
+        const highlightCanvas = document.getElementById('highlightCanvas');
+        
+        const baseCtx = baseCanvas.getContext('2d');
+        const guideCtx = guideCanvas.getContext('2d');
+        const drawCtx = drawCanvas.getContext('2d');
+        const highlightCtx = highlightCanvas.getContext('2d');
+
+        let currentZone = 1;
+        let isDrawing = false;
+        let showGuides = true;
+        let lastX, lastY;
+        let zoneCoverage = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        let completedZones = new Set();
+
+        const zones = {
+            1: { 
+                name: 'Sky',
+                instruction: 'Draw diagonal lines (45°) for soft sky texture',
+                pattern: 'diagonal',
+                angle: 45,
+                spacing: 6,
+                color: '#667eea',
+                area: { type: 'rect', x: 0, y: 0, w: 1, h: 0.35 }
+            },
+            2: { 
+                name: 'Mountain',
+                instruction: 'Cross-hatch to show mountain depth and shadow',
+                pattern: 'cross',
+                angle: 0,
+                spacing: 5,
+                color: '#764ba2',
+                area: { type: 'triangle', points: [[0.2, 0.6], [0.5, 0.25], [0.8, 0.6]] }
+            },
+            3: { 
+                name: 'Water',
+                instruction: 'Horizontal lines with slight waves for calm water',
+                pattern: 'waves',
+                angle: 0,
+                spacing: 7,
+                color: '#48c6ef',
+                area: { type: 'rect', x: 0, y: 0.7, w: 1, h: 0.3 }
+            },
+            4: { 
+                name: 'Trees',
+                instruction: 'Vertical strokes for tree texture and foliage',
+                pattern: 'vertical',
+                angle: 90,
+                spacing: 4,
+                color: '#6f86d6',
+                area: { type: 'trees', positions: [[0.1, 0.55], [0.15, 0.6], [0.85, 0.55]] }
+            }
+        };
+
+        function setupCanvas() {
+            const container = document.querySelector('.canvas-stack');
+            const parent = container.parentElement;
+            const size = Math.min(parent.clientWidth, parent.clientHeight) * 0.85;
+            
+            [baseCanvas, guideCanvas, drawCanvas, highlightCanvas].forEach(canvas => {
+                canvas.width = size;
+                canvas.height = size;
+                canvas.style.width = size + 'px';
+                canvas.style.height = size + 'px';
+            });
+
+            drawBaseArtwork();
+            drawAllGuides();
+            updateActiveZone();
+        }
+
+        function drawBaseArtwork() {
+            // White background
+            baseCtx.fillStyle = 'white';
+            baseCtx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+
+            // Zone outlines (subtle)
+            baseCtx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            baseCtx.lineWidth = 1;
+            baseCtx.setLineDash([8, 4]);
+
+            const w = baseCanvas.width;
+            const h = baseCanvas.height;
+
+            // Sky border
+            baseCtx.strokeRect(0, 0, w, h * 0.35);
+
+            // Mountain outline
+            baseCtx.beginPath();
+            baseCtx.moveTo(w * 0.2, h * 0.6);
+            baseCtx.lineTo(w * 0.5, h * 0.25);
+            baseCtx.lineTo(w * 0.8, h * 0.6);
+            baseCtx.closePath();
+            baseCtx.stroke();
+
+            // Water border
+            baseCtx.strokeRect(0, h * 0.7, w, h * 0.3);
+
+            // Trees (simple triangles)
+            zones[4].area.positions.forEach(([x, y]) => {
+                baseCtx.beginPath();
+                baseCtx.moveTo(w * x - w * 0.03, h * y + h * 0.15);
+                baseCtx.lineTo(w * x, h * y);
+                baseCtx.lineTo(w * x + w * 0.03, h * y + h * 0.15);
+                baseCtx.closePath();
+                baseCtx.stroke();
+            });
+
+            baseCtx.setLineDash([]);
+        }
+
+        function drawAllGuides() {
+            if (!showGuides) {
+                guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+                return;
+            }
+
+            guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+            
+            // Draw guides for each zone
+            Object.entries(zones).forEach(([zoneNum, zone]) => {
+                drawZoneGuide(parseInt(zoneNum), zone, currentZone === parseInt(zoneNum));
+            });
+        }
+
+        function drawZoneGuide(zoneNum, zone, isActive) {
+            const w = guideCanvas.width;
+            const h = guideCanvas.height;
+            const alpha = isActive ? 0.5 : 0.15;
+
+            guideCtx.strokeStyle = `rgba(102, 126, 234, ${alpha})`;
+            guideCtx.fillStyle = `rgba(102, 126, 234, ${alpha})`;
+            guideCtx.lineWidth = 1.5;
+
+            switch(zone.pattern) {
+                case 'diagonal':
+                    // Diagonal guide lines for sky
+                    for (let i = 0; i < w * 1.5; i += 20) {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(i - h * 0.35, 0);
+                        guideCtx.lineTo(i, h * 0.35);
+                        guideCtx.stroke();
+
+                        // Add arrow at end
+                        if (isActive && i % 60 === 0) {
+                            drawArrow(guideCtx, i - 10, h * 0.35 - 10, i, h * 0.35);
+                        }
+                    }
+                    break;
+
+                case 'cross':
+                    // Cross-hatch guides for mountain
+                    const points = zone.area.points;
+                    guideCtx.save();
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(w * points[0][0], h * points[0][1]);
+                    guideCtx.lineTo(w * points[1][0], h * points[1][1]);
+                    guideCtx.lineTo(w * points[2][0], h * points[2][1]);
+                    guideCtx.closePath();
+                    guideCtx.clip();
+
+                    // Horizontal lines
+                    for (let y = h * 0.25; y < h * 0.6; y += 15) {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(w * 0.2, y);
+                        guideCtx.lineTo(w * 0.8, y);
+                        guideCtx.stroke();
+                    }
+                    // Vertical lines
+                    for (let x = w * 0.2; x < w * 0.8; x += 15) {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(x, h * 0.25);
+                        guideCtx.lineTo(x, h * 0.6);
+                        guideCtx.stroke();
+                    }
+
+                    guideCtx.restore();
+                    break;
+
+                case 'waves':
+                    // Wavy horizontal lines for water
+                    for (let y = h * 0.7; y < h; y += 15) {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(0, y);
+                        for (let x = 0; x < w; x += 20) {
+                            const wave = Math.sin(x / 30) * 3;
+                            guideCtx.lineTo(x, y + wave);
+                        }
+                        guideCtx.stroke();
+
+                        if (isActive) {
+                            drawArrow(guideCtx, w - 25, y, w - 5, y);
+                        }
+                    }
+                    break;
+
+                case 'vertical':
+                    // Vertical lines for trees
+                    zone.area.positions.forEach(([x, y]) => {
+                        for (let i = -3; i <= 3; i++) {
+                            guideCtx.beginPath();
+                            guideCtx.moveTo(w * x + i * 5, h * y);
+                            guideCtx.lineTo(w * x + i * 5, h * y + h * 0.15);
+                            guideCtx.stroke();
+                        }
+                    });
+                    break;
+            }
+
+            // Draw zone number
+            if (!completedZones.has(zoneNum)) {
+                const pos = getZoneCenter(zone);
+                guideCtx.fillStyle = isActive ? 'rgba(102, 126, 234, 0.8)' : 'rgba(102, 126, 234, 0.3)';
+                guideCtx.beginPath();
+                guideCtx.arc(w * pos.x, h * pos.y, 20, 0, Math.PI * 2);
+                guideCtx.fill();
+
+                guideCtx.fillStyle = 'white';
+                guideCtx.font = 'bold 18px sans-serif';
+                guideCtx.textAlign = 'center';
+                guideCtx.textBaseline = 'middle';
+                guideCtx.fillText(zoneNum, w * pos.x, h * pos.y);
+            }
+        }
+
+        function drawArrow(ctx, x1, y1, x2, y2) {
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(
+                x2 - 10 * Math.cos(angle - Math.PI / 6),
+                y2 - 10 * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(
+                x2 - 10 * Math.cos(angle + Math.PI / 6),
+                y2 - 10 * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.stroke();
+        }
+
+        function getZoneCenter(zone) {
+            switch(zone.area.type) {
+                case 'rect':
+                    return { x: zone.area.x + zone.area.w / 2, y: zone.area.y + zone.area.h / 2 };
+                case 'triangle':
+                    const points = zone.area.points;
+                    return { x: (points[0][0] + points[1][0] + points[2][0]) / 3,
+                            y: (points[0][1] + points[1][1] + points[2][1]) / 3 };
+                case 'trees':
+                    return { x: zone.area.positions[0][0], y: zone.area.positions[0][1] + 0.075 };
+            }
+        }
+
+        function updateActiveZone() {
+            const zone = zones[currentZone];
+            document.getElementById('activeZoneNum').textContent = currentZone;
+            document.getElementById('activeZoneInstruction').textContent = zone.instruction;
+            
+            // Draw pattern preview
+            const preview = document.getElementById('activePatternPreview');
+            preview.width = 50;
+            preview.height = 50;
+            const pCtx = preview.getContext('2d');
+            pCtx.fillStyle = 'white';
+            pCtx.fillRect(0, 0, 50, 50);
+            drawPatternPreview(pCtx, zone);
+
+            // Update hint
+            document.getElementById('hintToast').textContent = 
+                `✏️ Draw in zone ${currentZone} (${zone.name})`;
+
+            drawAllGuides();
+        }
+
+        function drawPatternPreview(ctx, zone) {
+            ctx.strokeStyle = zone.color;
+            ctx.lineWidth = 1;
+
+            switch(zone.pattern) {
+                case 'diagonal':
+                    for (let i = 0; i < 80; i += 8) {
+                        ctx.beginPath();
+                        ctx.moveTo(i - 50, 0);
+                        ctx.lineTo(i, 50);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'cross':
+                    for (let i = 8; i < 50; i += 8) {
+                        ctx.beginPath();
+                        ctx.moveTo(i, 4);
+                        ctx.lineTo(i, 46);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(4, i);
+                        ctx.lineTo(46, i);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'waves':
+                    for (let y = 8; y < 50; y += 10) {
+                        ctx.beginPath();
+                        ctx.moveTo(4, y);
+                        for (let x = 4; x < 46; x += 5) {
+                            const wave = Math.sin(x / 8) * 2;
+                            ctx.lineTo(x, y + wave);
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+                case 'vertical':
+                    for (let i = 8; i < 50; i += 6) {
+                        ctx.beginPath();
+                        ctx.moveTo(i, 4);
+                        ctx.lineTo(i, 46);
+                        ctx.stroke();
+                    }
+                    break;
+            }
+        }
+
+        function drawStroke(x, y) {
+            const zone = zones[currentZone];
+            
+            drawCtx.strokeStyle = zone.color + 'AA';
+            drawCtx.lineWidth = 1;
+            drawCtx.lineCap = 'round';
+
+            const spacing = zone.spacing;
+            const length = 12;
+            const rad = zone.angle * Math.PI / 180;
+
+            // Draw hatching stroke
+            for (let i = -8; i < 8; i += spacing) {
+                const offsetX = i * Math.cos(rad + Math.PI/2);
+                const offsetY = i * Math.sin(rad + Math.PI/2);
+                
+                drawCtx.beginPath();
+                drawCtx.moveTo(
+                    x + offsetX - length/2 * Math.cos(rad),
+                    y + offsetY - length/2 * Math.sin(rad)
+                );
+                drawCtx.lineTo(
+                    x + offsetX + length/2 * Math.cos(rad),
+                    y + offsetY + length/2 * Math.sin(rad)
+                );
+                drawCtx.stroke();
+            }
+
+            // Update coverage (simplified)
+            zoneCoverage[currentZone] += 0.5;
+            checkZoneCompletion();
+        }
+
+        function checkZoneCompletion() {
+            if (zoneCoverage[currentZone] >= 50 && !completedZones.has(currentZone)) {
+                completedZones.add(currentZone);
+                document.querySelector(`[data-zone="${currentZone}"]`).classList.add('completed');
+                updateProgress();
+
+                if (completedZones.size === Object.keys(zones).length) {
+                    setTimeout(showCompletion, 1000);
+                } else {
+                    // Auto-advance to next incomplete zone
+                    for (let i = 1; i <= 4; i++) {
+                        if (!completedZones.has(i)) {
+                            selectZone(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateProgress() {
+            document.getElementById('progressText').textContent = 
+                `${completedZones.size}/${Object.keys(zones).length}`;
+        }
+
+        function selectZone(zoneNum) {
+            currentZone = zoneNum;
+            document.querySelectorAll('.zone-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-zone="${zoneNum}"]`).classList.add('active');
+            updateActiveZone();
+        }
+
+        function showCompletion() {
+            const finalCanvas = document.getElementById('finalArtwork');
+            finalCanvas.width = drawCanvas.width;
+            finalCanvas.height = drawCanvas.height;
+            const finalCtx = finalCanvas.getContext('2d');
+            
+            finalCtx.drawImage(baseCanvas, 0, 0);
+            finalCtx.drawImage(drawCanvas, 0, 0);
+
+            document.getElementById('completionOverlay').classList.add('visible');
+            document.getElementById('hintToast').style.display = 'none';
+        }
+
+        // Event handlers
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            lastX = x;
+            lastY = y;
+            drawStroke(x, y);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            const dist = Math.sqrt((x - lastX) ** 2 + (y - lastY) ** 2);
+            if (dist > 3) {
+                drawStroke(x, y);
+                lastX = x;
+                lastY = y;
+            }
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        drawCanvas.addEventListener('mousedown', startDrawing);
+        drawCanvas.addEventListener('mousemove', draw);
+        drawCanvas.addEventListener('mouseup', stopDrawing);
+        drawCanvas.addEventListener('mouseleave', stopDrawing);
+
+        drawCanvas.addEventListener('touchstart', startDrawing);
+        drawCanvas.addEventListener('touchmove', draw);
+        drawCanvas.addEventListener('touchend', stopDrawing);
+
+        document.querySelectorAll('.zone-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (!completedZones.has(parseInt(this.dataset.zone))) {
+                    selectZone(parseInt(this.dataset.zone));
+                }
+            });
+        });
+
+        document.getElementById('toggleGuideBtn').addEventListener('click', function() {
+            showGuides = !showGuides;
+            this.classList.toggle('active');
+            this.textContent = showGuides ? '👁️' : '👁️‍🗨️';
+            drawAllGuides();
+        });
+
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            zoneCoverage = { 1: 0, 2: 0, 3: 0, 4: 0 };
+            completedZones.clear();
+            document.querySelectorAll('.zone-btn').forEach(btn => {
+                btn.classList.remove('completed');
+            });
+            updateProgress();
+            drawAllGuides();
+        });
+
+        document.getElementById('clearZoneBtn').addEventListener('click', () => {
+            // Clear current zone only (simplified - clears all for demo)
+            zoneCoverage[currentZone] = 0;
+            completedZones.delete(currentZone);
+            document.querySelector(`[data-zone="${currentZone}"]`).classList.remove('completed');
+            updateProgress();
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            setTimeout(() => {
+                document.getElementById('hintToast').style.animation = 'none';
+            }, 5000);
+        });
+
+        window.addEventListener('resize', setupCanvas);
+    </script>
+</body>
+</html>
