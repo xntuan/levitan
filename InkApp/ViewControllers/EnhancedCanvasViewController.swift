@@ -44,6 +44,9 @@ class EnhancedCanvasViewController: UIViewController {
     private var autoHideTimer: Timer?
     private var isUIVisible = true
 
+    // UI Mode
+    private var isSimpleMode = true  // Lake-like simplified UI (default)
+
     // Completion tracking
     private var artworkStartTime: Date?
     private var currentTemplate: Template?
@@ -132,11 +135,16 @@ class EnhancedCanvasViewController: UIViewController {
     private func setupTestEnvironment() {
         // Add test UI for debugging
         addDebugInfo()
-        addLayerSelector()
+
+        // In Simple Mode, layer selector is hidden by default
+        if !isSimpleMode {
+            addLayerSelector()
+        }
+
         addBrushPalette()
         addUndoRedoButtons()
         addCompleteButton()
-        addLibraryButton()
+        addBackButton()  // Back to gallery (replaces library button)
 
         // Start auto-hide timer
         scheduleAutoHide()
@@ -492,27 +500,46 @@ class EnhancedCanvasViewController: UIViewController {
         ])
     }
 
-    private func addLibraryButton() {
+    private func addBackButton() {
         libraryButton = UIButton(type: .system)
-        libraryButton.setTitle("📚", for: .normal)
-        libraryButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 24, weight: .medium)
+        libraryButton.setTitle("← Gallery", for: .normal)
+        libraryButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 16, weight: .semibold)
         libraryButton.backgroundColor = DesignTokens.Colors.surface
         libraryButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        libraryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         libraryButton.layer.cornerRadius = 22
         libraryButton.layer.shadowColor = UIColor.black.cgColor
         libraryButton.layer.shadowOpacity = 0.2
         libraryButton.layer.shadowOffset = CGSize(width: 0, height: 8)
         libraryButton.layer.shadowRadius = 16
-        libraryButton.addTarget(self, action: #selector(libraryButtonTapped), for: .touchUpInside)
+        libraryButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
         view.addSubview(libraryButton)
 
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             libraryButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
             libraryButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            libraryButton.widthAnchor.constraint(equalToConstant: 60),
+            libraryButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 100),
             libraryButton.heightAnchor.constraint(equalToConstant: 44)
         ])
+    }
+
+    @objc private func backButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.libraryButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.libraryButton.transform = .identity
+            }
+        }
+
+        // Go back to gallery
+        navigationController?.popViewController(animated: true)
     }
 
     @objc private func completeButtonTapped() {
@@ -731,10 +758,10 @@ class EnhancedCanvasViewController: UIViewController {
             stackView.addArrangedSubview(button)
         }
 
-        // Add advanced settings button
+        // Add Pro Mode settings button
         advancedSettingsButton = UIButton(type: .system)
-        advancedSettingsButton.setTitle("⚙️", for: .normal)
-        advancedSettingsButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 24, weight: .medium)
+        advancedSettingsButton.setTitle("···", for: .normal)  // Three dots for Pro Mode
+        advancedSettingsButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 28, weight: .bold)
         advancedSettingsButton.backgroundColor = DesignTokens.Colors.surface
         advancedSettingsButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
         advancedSettingsButton.layer.cornerRadius = 26
@@ -838,29 +865,6 @@ class EnhancedCanvasViewController: UIViewController {
         print("⚙️ Opening advanced brush settings")
     }
 
-    @objc private func libraryButtonTapped() {
-        // Haptic feedback
-        let impact = UIImpactFeedbackGenerator(style: .medium)
-        impact.impactOccurred()
-
-        // Show brush library
-        let library = BrushLibraryView()
-        library.delegate = self
-        library.configure(with: brushEngine.config)
-        library.present(in: view)
-
-        // Animate button
-        UIView.animate(withDuration: 0.1) {
-            self.libraryButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        } completion: { _ in
-            UIView.animate(withDuration: 0.1) {
-                self.libraryButton.transform = .identity
-            }
-        }
-
-        print("📚 Opening brush library")
-    }
-
     // MARK: - Auto-Hide Behavior
 
     private func scheduleAutoHide() {
@@ -877,7 +881,10 @@ class EnhancedCanvasViewController: UIViewController {
         guard isUIVisible else { return }
 
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
-            self.layerSelectorView?.alpha = 0
+            // In Simple Mode, layer selector stays hidden
+            if !self.isSimpleMode {
+                self.layerSelectorView?.alpha = 0
+            }
             self.brushPaletteView?.alpha = 0
             self.advancedSettingsButton?.alpha = 0
             self.completeButton?.alpha = 0
@@ -895,7 +902,10 @@ class EnhancedCanvasViewController: UIViewController {
         }
 
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
-            self.layerSelectorView?.alpha = 1
+            // In Simple Mode, layer selector stays hidden
+            if !self.isSimpleMode {
+                self.layerSelectorView?.alpha = 1
+            }
             self.brushPaletteView?.alpha = 1
             self.advancedSettingsButton?.alpha = 1
             self.completeButton?.alpha = 1
