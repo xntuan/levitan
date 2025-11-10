@@ -119,3 +119,19 @@ fragment float4 composite_fragment(
 
     return result;
 }
+
+// MARK: - Texture Display Shader
+
+// Simple texture display for rendering composited canvas to screen
+fragment float4 texture_display_fragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> displayTexture [[texture(0)]]
+) {
+    constexpr sampler textureSampler(
+        mag_filter::linear,
+        min_filter::linear,
+        address::clamp_to_edge
+    );
+
+    return displayTexture.sample(textureSampler, in.texCoord);
+}

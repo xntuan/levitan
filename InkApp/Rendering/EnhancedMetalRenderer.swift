@@ -24,6 +24,9 @@ class EnhancedMetalRenderer: NSObject {
     var canvasTexture: MTLTexture?
     var layerTextures: [UUID: MTLTexture] = [:]
 
+    // Display pipeline
+    var displayPipelineState: MTLRenderPipelineState?
+
     // Canvas state
     var canvasSize: CGSize = CGSize(width: 2048, height: 2048)
 
@@ -58,6 +61,9 @@ class EnhancedMetalRenderer: NSObject {
 
         // Setup layer textures
         setupLayerTextures()
+
+        // Setup display pipeline
+        setupDisplayPipeline()
 
         metalView.delegate = self
     }
@@ -265,25 +271,11 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
             return
         }
 
-        // Get render pass descriptor
-        guard let renderPassDescriptor = view.currentRenderPassDescriptor else {
-            return
-        }
+        // Composite all visible layers to single texture
+        let compositedTexture = compositeLayersForDisplay()
 
-        // Create render encoder
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(
-            descriptor: renderPassDescriptor
-        ) else {
-            return
-        }
-
-        // TODO: Render composited canvas to screen
-        // For now, just clear to white
-        renderPassDescriptor.colorAttachments[0].clearColor =
-            MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
-
-        // End encoding
-        renderEncoder.endEncoding()
+        // Render composited texture to screen
+        renderTextureToScreen(compositedTexture, view: view, commandBuffer: commandBuffer)
 
         // Present drawable
         if let drawable = view.currentDrawable {
@@ -292,5 +284,69 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
 
         // Commit
         commandBuffer.commit()
+    }
+
+    // MARK: - Display Pipeline
+
+    private func setupDisplayPipeline() {
+        guard let library = device.makeDefaultLibrary() else {
+            print("ERROR: Could not load default library for display pipeline")
+            return
+        }
+
+        let vertexFunction = library.makeFunction(name: "composite_vertex")
+        let fragmentFunction = library.makeFunction(name: "texture_display_fragment")
+
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = vertexFunction
+        pipelineDescriptor.fragmentFunction = fragmentFunction
+        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+
+        do {
+            displayPipelineState = try device.makeRenderPipelineState(
+                descriptor: pipelineDescriptor
+            )
+        } catch {
+            print("ERROR: Failed to create display pipeline: \(error)")
+        }
+    }
+
+    private func renderTextureToScreen(_ texture: MTLTexture?, view: MTKView, commandBuffer: MTLCommandBuffer) {
+        guard let texture = texture,
+              let renderPassDescriptor = view.currentRenderPassDescriptor,
+              let pipelineState = displayPipelineState else {
+            // Fallback: clear to white if no texture
+            if let renderPassDescriptor = view.currentRenderPassDescriptor,
+               let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
+                renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
+                renderEncoder.endEncoding()
+            }
+            return
+        }
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+            return
+        }
+
+        renderEncoder.setRenderPipelineState(pipelineState)
+        renderEncoder.setFragmentTexture(texture, index: 0)
+
+        // Draw full-screen quad (6 vertices for 2 triangles)
+        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+
+        renderEncoder.endEncoding()
+    }
+
+    private func compositeLayersForDisplay() -> MTLTexture? {
+        // For now, just return the first visible layer
+        // TODO: Properly composite all layers with blend modes
+        for layer in layerManager.layers {
+            if layer.isVisible, let texture = layerTextures[layer.id] {
+                return texture
+            }
+        }
+
+        // If no visible layers, return white canvas
+        return canvasTexture
     }
 }

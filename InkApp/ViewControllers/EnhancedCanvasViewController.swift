@@ -20,6 +20,7 @@ class EnhancedCanvasViewController: UIViewController {
     var renderer: EnhancedMetalRenderer!
     var layerManager: LayerManager!
     var brushEngine: BrushEngine!
+    var undoManager: DrawingUndoManager!
 
     // Canvas state
     var canvasSize: CGSize = CGSize(width: 2048, height: 2048)
@@ -28,6 +29,11 @@ class EnhancedCanvasViewController: UIViewController {
 
     // Drawing state
     var isDrawing = false
+
+    // UI elements
+    private var brushButtons: [UIButton] = []
+    private var selectedBrushIndex = 0
+    private var debugLabel: UILabel?
 
     // MARK: - Lifecycle
 
@@ -66,6 +72,9 @@ class EnhancedCanvasViewController: UIViewController {
             scale: 1.0
         )
         brushEngine = BrushEngine(brush: defaultBrush)
+
+        // Initialize undo manager
+        undoManager = DrawingUndoManager(maxUndoLevels: 50)
     }
 
     private func setupMetalView() {
@@ -104,6 +113,7 @@ class EnhancedCanvasViewController: UIViewController {
         // Add test UI for debugging
         addDebugInfo()
         addBrushSelector()
+        addUndoRedoButtons()
     }
 
     // MARK: - Gesture Handlers
@@ -141,7 +151,8 @@ class EnhancedCanvasViewController: UIViewController {
 
         // Check if layer is locked
         if activeLayer.isLocked {
-            print("Layer '\(activeLayer.name)' is locked!")
+            showAlert("Layer '\(activeLayer.name)' is locked.\nUnlock it to draw.", title: "Layer Locked")
+            print("⚠️ Layer '\(activeLayer.name)' is locked!")
             return
         }
 
@@ -190,6 +201,9 @@ class EnhancedCanvasViewController: UIViewController {
 
             // Render to layer
             renderer.drawPatternStamps(stamps)
+
+            // Record for undo
+            undoManager.recordStroke(completedStroke)
 
             print("✅ Stroke completed with \(completedStroke.points.count) points, \(stamps.count) stamps")
         }
@@ -262,6 +276,7 @@ class EnhancedCanvasViewController: UIViewController {
     // MARK: - Debug UI
 
     private func addDebugInfo() {
+        #if DEBUG
         let label = UILabel()
         label.frame = CGRect(x: 20, y: 50, width: 300, height: 100)
         label.numberOfLines = 0
@@ -270,19 +285,36 @@ class EnhancedCanvasViewController: UIViewController {
             weight: DesignTokens.Typography.regular
         )
         label.textColor = DesignTokens.Colors.textSecondary
-        label.backgroundColor = DesignTokens.Colors.surface.withAlphaComponent(0.8)
+        label.backgroundColor = DesignTokens.Colors.surface.withAlphaComponent(0.9)
         label.layer.cornerRadius = 8
         label.layer.masksToBounds = true
         label.textAlignment = .left
-
         label.text = """
         🎨 Ink Drawing App
-        📄 Layer: Sky
+        📄 Layer: \(layerManager.activeLayer?.name ?? "None")
         🖌️ Brush: Parallel Lines
         👆 Tap to draw
         """
 
+        debugLabel = label
         view.addSubview(label)
+        #endif
+    }
+
+    private func updateDebugInfo() {
+        #if DEBUG
+        guard let label = debugLabel,
+              let activeLayer = layerManager.activeLayer else { return }
+
+        let brushName = buttonName(for: brushEngine.currentBrush.type)
+
+        label.text = """
+        🎨 Ink Drawing App
+        📄 Layer: \(activeLayer.name)
+        🖌️ Brush: \(brushName)
+        👆 Tap to draw
+        """
+        #endif
     }
 
     private func addBrushSelector() {
@@ -291,6 +323,8 @@ class EnhancedCanvasViewController: UIViewController {
         let brushTypes: [PatternBrush.PatternType] = [
             .parallelLines, .crossHatch, .dots, .contourLines, .waves
         ]
+
+        brushButtons.removeAll()
 
         for (index, brushType) in brushTypes.enumerated() {
             let button = UIButton(type: .system)
@@ -301,13 +335,21 @@ class EnhancedCanvasViewController: UIViewController {
                 height: buttonHeight
             )
             button.setTitle(buttonName(for: brushType), for: .normal)
-            button.backgroundColor = DesignTokens.Colors.surface
-            button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
             button.layer.cornerRadius = 8
             button.tag = index
 
+            // Set initial state
+            if index == selectedBrushIndex {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.setTitleColor(.white, for: .normal)
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+            }
+
             button.addTarget(self, action: #selector(brushButtonTapped(_:)), for: .touchUpInside)
 
+            brushButtons.append(button)
             view.addSubview(button)
         }
     }
@@ -318,7 +360,28 @@ class EnhancedCanvasViewController: UIViewController {
         ]
 
         if sender.tag < brushTypes.count {
+            selectedBrushIndex = sender.tag
             changeBrush(type: brushTypes[sender.tag])
+            updateBrushButtonsUI()
+            updateDebugInfo()
+        }
+    }
+
+    private func updateBrushButtonsUI() {
+        for (index, button) in brushButtons.enumerated() {
+            UIView.animate(withDuration: DesignTokens.Animation.durationFast) {
+                if index == self.selectedBrushIndex {
+                    // Selected state
+                    button.backgroundColor = DesignTokens.Colors.inkPrimary
+                    button.setTitleColor(.white, for: .normal)
+                    button.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+                } else {
+                    // Normal state
+                    button.backgroundColor = DesignTokens.Colors.surface
+                    button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+                    button.transform = .identity
+                }
+            }
         }
     }
 
@@ -330,5 +393,80 @@ class EnhancedCanvasViewController: UIViewController {
         case .contourLines: return "◯ Contour"
         case .waves: return "〜 Waves"
         }
+    }
+
+    // MARK: - Undo/Redo
+
+    private func addUndoRedoButtons() {
+        let buttonWidth: CGFloat = 80
+        let buttonHeight: CGFloat = 44
+        let spacing: CGFloat = 10
+
+        // Undo button
+        let undoButton = UIButton(type: .system)
+        undoButton.frame = CGRect(
+            x: view.bounds.width - (buttonWidth * 2 + spacing + 20),
+            y: 50,
+            width: buttonWidth,
+            height: buttonHeight
+        )
+        undoButton.setTitle("⏮️ Undo", for: .normal)
+        undoButton.backgroundColor = DesignTokens.Colors.surface
+        undoButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        undoButton.layer.cornerRadius = 8
+        undoButton.addTarget(self, action: #selector(undoButtonTapped), for: .touchUpInside)
+        view.addSubview(undoButton)
+
+        // Redo button
+        let redoButton = UIButton(type: .system)
+        redoButton.frame = CGRect(
+            x: view.bounds.width - (buttonWidth + 20),
+            y: 50,
+            width: buttonWidth,
+            height: buttonHeight
+        )
+        redoButton.setTitle("Redo ⏭️", for: .normal)
+        redoButton.backgroundColor = DesignTokens.Colors.surface
+        redoButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        redoButton.layer.cornerRadius = 8
+        redoButton.addTarget(self, action: #selector(redoButtonTapped), for: .touchUpInside)
+        view.addSubview(redoButton)
+    }
+
+    @objc private func undoButtonTapped() {
+        guard undoManager.canUndo() else {
+            showAlert("Nothing to undo", title: "Info")
+            return
+        }
+
+        // For now, just show message
+        // TODO: Implement actual undo rendering
+        _ = undoManager.undo()
+        showAlert("Undo not yet fully implemented\nWill clear layer for now", title: "Undo")
+        clearCurrentLayer()
+
+        print("⏮️ Undo (\(undoManager.undoCount()) remaining)")
+    }
+
+    @objc private func redoButtonTapped() {
+        guard undoManager.canRedo() else {
+            showAlert("Nothing to redo", title: "Info")
+            return
+        }
+
+        _ = undoManager.redo()
+        print("⏭️ Redo (\(undoManager.redoCount()) remaining)")
+    }
+
+    // MARK: - Error Handling
+
+    private func showAlert(_ message: String, title: String = "Notice") {
+        let alert = UIAlertController(
+            title: title,
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
