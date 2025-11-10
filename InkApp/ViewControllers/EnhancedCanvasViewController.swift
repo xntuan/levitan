@@ -1003,6 +1003,20 @@ extension EnhancedCanvasViewController: LayerSelectorDelegate {
             print("🎨 Changed blend mode for '\(layer.name)' to: \(blendMode.displayName)")
         }
     }
+
+    func layerSelector(_ selector: LayerSelectorView, didChangeOpacity opacity: Float, for layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.setLayerOpacity(opacity, at: index)
+
+            // Update layer selector to show new opacity
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            let opacityPercent = Int(opacity * 100)
+            print("💧 Changed opacity for '\(layer.name)' to: \(opacityPercent)%")
+        }
+    }
 }
 
 // MARK: - BrushSettingsPanelDelegate

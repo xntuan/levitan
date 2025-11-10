@@ -16,6 +16,7 @@ protocol LayerSelectorDelegate: AnyObject {
     func layerSelector(_ selector: LayerSelectorView, didRequestRenameLayer layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didRequestToggleLockFor layer: Layer)
     func layerSelector(_ selector: LayerSelectorView, didChangeBlendMode blendMode: Layer.BlendMode, for layer: Layer)
+    func layerSelector(_ selector: LayerSelectorView, didChangeOpacity opacity: Float, for layer: Layer)
 }
 
 class LayerSelectorView: UIView {
@@ -224,6 +225,13 @@ extension LayerSelectorView: LayerCardDelegate {
 
         let alert = UIAlertController(title: layer.name, message: nil, preferredStyle: .actionSheet)
 
+        // Opacity
+        let opacityPercent = Int(layer.opacity * 100)
+        alert.addAction(UIAlertAction(title: "Opacity: \(opacityPercent)%", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            self.showOpacitySlider(for: layer, from: sourceView)
+        })
+
         // Blend Mode
         let currentBlendMode = layer.blendMode.displayName
         alert.addAction(UIAlertAction(title: "Blend Mode: \(currentBlendMode)", style: .default) { [weak self] _ in
@@ -262,6 +270,79 @@ extension LayerSelectorView: LayerCardDelegate {
         }
 
         viewController.present(alert, animated: true)
+    }
+
+    private func showOpacitySlider(for layer: Layer, from sourceView: UIView) {
+        guard let viewController = findViewController() else { return }
+
+        let alert = UIAlertController(title: "Layer Opacity", message: nil, preferredStyle: .alert)
+
+        // Add slider
+        let sliderHeight: CGFloat = 50
+        let slider = UISlider()
+        slider.minimumValue = 0
+        slider.maximumValue = 100
+        slider.value = layer.opacity * 100
+        slider.translatesAutoresizingMaskIntoConstraints = false
+
+        // Add label
+        let label = UILabel()
+        label.text = "\(Int(slider.value))%"
+        label.textAlignment = .center
+        label.font = UIFont.systemFont(ofSize: 24, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        // Container view
+        let containerView = UIView()
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(label)
+        containerView.addSubview(slider)
+
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: containerView.topAnchor),
+            label.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+
+            slider.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 8),
+            slider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            slider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+            slider.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+
+            containerView.heightAnchor.constraint(equalToConstant: 80)
+        ])
+
+        // Update label on slider change
+        slider.addTarget(self, action: #selector(opacitySliderChanged(_:)), for: .valueChanged)
+
+        // Store layer reference for slider action
+        slider.accessibilityIdentifier = layer.id.uuidString
+        slider.accessibilityLabel = String(format: "%.0f", slider.value)
+
+        alert.view.addSubview(containerView)
+
+        NSLayoutConstraint.activate([
+            containerView.topAnchor.constraint(equalTo: alert.view.topAnchor, constant: 50),
+            containerView.leadingAnchor.constraint(equalTo: alert.view.leadingAnchor),
+            containerView.trailingAnchor.constraint(equalTo: alert.view.trailingAnchor),
+            containerView.bottomAnchor.constraint(equalTo: alert.view.bottomAnchor, constant: -70)
+        ])
+
+        // Actions
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Apply", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            let opacity = slider.value / 100.0
+            self.delegate?.layerSelector(self, didChangeOpacity: opacity, for: layer)
+        })
+
+        viewController.present(alert, animated: true)
+    }
+
+    @objc private func opacitySliderChanged(_ slider: UISlider) {
+        // Find label and update
+        if let containerView = slider.superview,
+           let label = containerView.subviews.first(where: { $0 is UILabel }) as? UILabel {
+            label.text = "\(Int(slider.value))%"
+        }
     }
 
     private func showBlendModeMenu(for layer: Layer, from sourceView: UIView) {
