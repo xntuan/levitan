@@ -34,6 +34,12 @@ class EnhancedCanvasViewController: UIViewController {
     private var brushButtons: [UIButton] = []
     private var selectedBrushIndex = 0
     private var debugLabel: UILabel?
+    private var layerSelectorView: LayerSelectorView!
+    private var brushPaletteView: UIView!
+
+    // Auto-hide
+    private var autoHideTimer: Timer?
+    private var isUIVisible = true
 
     // MARK: - Lifecycle
 
@@ -112,8 +118,12 @@ class EnhancedCanvasViewController: UIViewController {
     private func setupTestEnvironment() {
         // Add test UI for debugging
         addDebugInfo()
-        addBrushSelector()
+        addLayerSelector()
+        addBrushPalette()
         addUndoRedoButtons()
+
+        // Start auto-hide timer
+        scheduleAutoHide()
     }
 
     // MARK: - Gesture Handlers
@@ -140,32 +150,7 @@ class EnhancedCanvasViewController: UIViewController {
     }
 
     // MARK: - Touch Handling (Drawing)
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // Don't draw with two fingers (that's pan gesture)
-        guard touches.count == 1,
-              let touch = touches.first,
-              let activeLayer = layerManager.activeLayer else {
-            return
-        }
-
-        // Check if layer is locked
-        if activeLayer.isLocked {
-            showAlert("Layer '\(activeLayer.name)' is locked.\nUnlock it to draw.", title: "Layer Locked")
-            print("⚠️ Layer '\(activeLayer.name)' is locked!")
-            return
-        }
-
-        let point = touch.location(in: metalView)
-        let canvasPoint = viewToCanvasPoint(point)
-        let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
-
-        // Begin stroke
-        brushEngine.beginStroke(at: canvasPoint, pressure: pressure, layerId: activeLayer.id)
-        isDrawing = true
-
-        print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint)")
-    }
+    // Note: touchesBegan is implemented below with auto-hide logic
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isDrawing,
@@ -468,5 +453,350 @@ class EnhancedCanvasViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    // MARK: - Layer Selector
+
+    private func addLayerSelector() {
+        layerSelectorView = LayerSelectorView()
+        layerSelectorView.delegate = self
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        view.addSubview(layerSelectorView)
+
+        layerSelectorView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            layerSelectorView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            layerSelectorView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            layerSelectorView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -90),
+            layerSelectorView.heightAnchor.constraint(equalToConstant: 96)
+        ])
+    }
+
+    private func addBrushPalette() {
+        // Create brush palette container
+        brushPaletteView = UIView()
+        brushPaletteView.backgroundColor = UIColor.white.withAlphaComponent(0.95)
+        brushPaletteView.layer.cornerRadius = 20
+        brushPaletteView.layer.masksToBounds = false
+
+        // Add blur effect
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
+        let blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = brushPaletteView.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.layer.cornerRadius = 20
+        blurView.clipsToBounds = true
+        brushPaletteView.insertSubview(blurView, at: 0)
+
+        // Shadow
+        brushPaletteView.layer.shadowColor = UIColor.black.cgColor
+        brushPaletteView.layer.shadowOpacity = 0.15
+        brushPaletteView.layer.shadowOffset = CGSize(width: 0, height: 12)
+        brushPaletteView.layer.shadowRadius = 20
+
+        view.addSubview(brushPaletteView)
+
+        brushPaletteView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            brushPaletteView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            brushPaletteView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            brushPaletteView.heightAnchor.constraint(equalToConstant: 64),
+            brushPaletteView.widthAnchor.constraint(equalToConstant: 340)
+        ])
+
+        // Create brush buttons in palette
+        let brushTypes: [PatternBrush.PatternType] = [
+            .parallelLines, .crossHatch, .dots, .contourLines, .waves
+        ]
+
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.distribution = .fillEqually
+        stackView.spacing = 8
+
+        brushPaletteView.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: brushPaletteView.topAnchor, constant: 10),
+            stackView.leadingAnchor.constraint(equalTo: brushPaletteView.leadingAnchor, constant: 12),
+            stackView.trailingAnchor.constraint(equalTo: brushPaletteView.trailingAnchor, constant: -12),
+            stackView.bottomAnchor.constraint(equalTo: brushPaletteView.bottomAnchor, constant: -10)
+        ])
+
+        brushButtons.removeAll()
+
+        for (index, brushType) in brushTypes.enumerated() {
+            let button = UIButton(type: .system)
+            button.setTitle(brushIcon(for: brushType), for: .normal)
+            button.titleLabel?.font = DesignTokens.Typography.systemFont(size: 20, weight: .semibold)
+            button.layer.cornerRadius = 22
+            button.tag = index
+
+            // Long press for settings
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(brushButtonLongPressed(_:)))
+            button.addGestureRecognizer(longPress)
+
+            // Set initial state
+            updateBrushButton(button, index: index, isSelected: index == selectedBrushIndex)
+
+            button.addTarget(self, action: #selector(brushButtonTapped(_:)), for: .touchUpInside)
+            brushButtons.append(button)
+            stackView.addArrangedSubview(button)
+        }
+    }
+
+    private func updateBrushButton(_ button: UIButton, index: Int, isSelected: Bool) {
+        UIView.animate(withDuration: DesignTokens.Animation.durationFast) {
+            if isSelected {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.setTitleColor(.white, for: .normal)
+                button.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+                button.transform = .identity
+            }
+        }
+    }
+
+    private func brushIcon(for type: PatternBrush.PatternType) -> String {
+        switch type {
+        case .parallelLines: return "≡"
+        case .crossHatch: return "⊞"
+        case .dots: return "⊙"
+        case .contourLines: return "◎"
+        case .waves: return "≈"
+        }
+    }
+
+    @objc private func brushButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began,
+              let button = gesture.view as? UIButton else { return }
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show brush settings panel
+        let panel = BrushSettingsPanel(brush: brushEngine.currentBrush)
+        panel.delegate = self
+        panel.present(in: view)
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            button.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                button.transform = self.selectedBrushIndex == button.tag ?
+                    CGAffineTransform(scaleX: 1.05, y: 1.05) : .identity
+            }
+        }
+    }
+
+    // MARK: - Auto-Hide Behavior
+
+    private func scheduleAutoHide() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = Timer.scheduledTimer(
+            withTimeInterval: 3.0,
+            repeats: false
+        ) { [weak self] _ in
+            self?.hideUI()
+        }
+    }
+
+    private func hideUI() {
+        guard isUIVisible else { return }
+
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+            self.layerSelectorView?.alpha = 0
+            self.brushPaletteView?.alpha = 0
+        }
+
+        isUIVisible = false
+    }
+
+    private func showUI() {
+        guard !isUIVisible else {
+            // If already visible, just reschedule
+            scheduleAutoHide()
+            return
+        }
+
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+            self.layerSelectorView?.alpha = 1
+            self.brushPaletteView?.alpha = 1
+        }
+
+        isUIVisible = true
+        scheduleAutoHide()
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // Show UI on touch
+        if !isUIVisible {
+            showUI()
+        } else {
+            // Reschedule hide if UI is visible
+            scheduleAutoHide()
+        }
+
+        // Continue with existing touch handling...
+        // (rest of touchesBegan implementation stays the same)
+        guard touches.count == 1,
+              let touch = touches.first,
+              let activeLayer = layerManager.activeLayer else {
+            return
+        }
+
+        if activeLayer.isLocked {
+            showAlert("Layer '\(activeLayer.name)' is locked.\nUnlock it to draw.", title: "Layer Locked")
+            print("⚠️ Layer '\(activeLayer.name)' is locked!")
+            return
+        }
+
+        let point = touch.location(in: metalView)
+        let canvasPoint = viewToCanvasPoint(point)
+        let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
+
+        brushEngine.beginStroke(at: canvasPoint, pressure: pressure, layerId: activeLayer.id)
+        isDrawing = true
+
+        print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint)")
+    }
+}
+
+// MARK: - LayerSelectorDelegate
+
+extension EnhancedCanvasViewController: LayerSelectorDelegate {
+    func layerSelector(_ selector: LayerSelectorView, didSelectLayer layer: Layer) {
+        // Find layer index
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.selectLayer(at: index)
+            updateDebugInfo()
+            print("📄 Selected layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didToggleVisibilityFor layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.toggleLayerVisibility(at: index)
+
+            // Update layer selector
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            print("👁️ Toggled visibility for layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelectorDidRequestAddLayer(_ selector: LayerSelectorView) {
+        // Create new layer
+        let newLayerNumber = layerManager.layers.count + 1
+        let newLayer = Layer(name: "Layer \(newLayerNumber)", opacity: 1.0)
+
+        layerManager.addLayer(newLayer)
+
+        // Refresh layer selector
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        print("➕ Added new layer: '\(newLayer.name)'")
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestDeleteLayer layer: Layer) {
+        guard layerManager.layers.count > 1 else {
+            showAlert("Cannot delete the last layer", title: "Error")
+            return
+        }
+
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.removeLayer(at: index)
+
+            // Refresh layer selector
+            layerSelectorView.configure(
+                with: layerManager.layers,
+                selectedLayerId: layerManager.activeLayer?.id
+            )
+
+            print("🗑️ Deleted layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestRenameLayer layer: Layer) {
+        let alert = UIAlertController(
+            title: "Rename Layer",
+            message: nil,
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { textField in
+            textField.text = layer.name
+            textField.placeholder = "Layer name"
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+            guard let self = self,
+                  let newName = alert.textFields?.first?.text,
+                  !newName.isEmpty else {
+                return
+            }
+
+            if let index = self.layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+                self.layerManager.renameLayer(at: index, to: newName)
+
+                // Update layer selector
+                if let updatedLayer = self.layerManager.layers.first(where: { $0.id == layer.id }) {
+                    self.layerSelectorView.updateLayer(updatedLayer)
+                }
+
+                self.updateDebugInfo()
+                print("✏️ Renamed layer to: '\(newName)'")
+            }
+        })
+
+        present(alert, animated: true)
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestToggleLockFor layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.toggleLayerLock(at: index)
+
+            // Update layer selector
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            let status = layer.isLocked ? "unlocked" : "locked"
+            print("🔒 \(status.capitalized) layer: '\(layer.name)'")
+        }
+    }
+}
+
+// MARK: - BrushSettingsPanelDelegate
+
+extension EnhancedCanvasViewController: BrushSettingsPanelDelegate {
+    func brushSettingsPanel(_ panel: BrushSettingsPanel, didUpdateBrush brush: PatternBrush) {
+        // Update brush engine
+        brushEngine.currentBrush = brush
+        updateDebugInfo()
+
+        print("🖌️ Updated brush settings:")
+        print("  - Rotation: \(brush.rotation)°")
+        print("  - Spacing: \(brush.spacing)px")
+        print("  - Opacity: \(Int(brush.opacity * 100))%")
+        print("  - Scale: \(brush.scale)×")
+    }
+
+    func brushSettingsPanelDidCancel(_ panel: BrushSettingsPanel) {
+        print("❌ Brush settings cancelled")
     }
 }
