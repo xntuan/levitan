@@ -39,6 +39,9 @@ struct BrushConfiguration {
     // Tilt (Apple Pencil)
     var tiltDynamics: TiltDynamics = TiltDynamics()
 
+    // Rotation (Apple Pencil azimuth)
+    var rotationDynamics: RotationDynamics = RotationDynamics()
+
     struct TiltDynamics {
         var enabled: Bool = false
         var affectsSize: Bool = true
@@ -47,6 +50,18 @@ struct BrushConfiguration {
         var opacitySensitivity: Float = 0.3  // 0-1, how much tilt affects opacity
         var minimumTilt: Float = 0.0   // 0-90°, angle below which max effect
         var maximumTilt: Float = 90.0  // 0-90°, angle above which no effect
+    }
+
+    struct RotationDynamics {
+        var mode: RotationMode = .manual
+        var fixedRotation: Float = 45.0  // Used when mode is .fixed (0-360°)
+        var smoothing: Float = 0.3       // 0-1, exponential smoothing for azimuth changes
+
+        enum RotationMode: String, Codable {
+            case manual         // No automatic rotation, use PatternBrush.rotation
+            case fixed          // Use fixedRotation value
+            case followAzimuth  // Rotate to follow Apple Pencil direction
+        }
     }
 
     struct VelocityDynamics {
@@ -140,6 +155,9 @@ class EnhancedBrushEngine {
     private var velocityWindow: [(point: CGPoint, time: TimeInterval)] = []
     private let velocityWindowSize = 5
 
+    // Azimuth tracking (for rotation smoothing)
+    private var smoothedAzimuth: Float?
+
     // Last stamp tracking
     private var lastStampPosition: CGPoint?
     private var distanceSinceLastStamp: CGFloat = 0
@@ -176,6 +194,7 @@ class EnhancedBrushEngine {
         predictedPoints = []
         stabilizationBuffer = [strokePoint]
         velocityWindow = [(point, timestamp)]
+        smoothedAzimuth = nil  // Reset azimuth smoothing for new stroke
         lastStampPosition = point
         distanceSinceLastStamp = 0
 
@@ -403,6 +422,14 @@ class EnhancedBrushEngine {
                     tiltAngle = p0.tiltAngle ?? p1.tiltAngle
                 }
 
+                // Interpolate azimuth angle (if available)
+                let azimuthAngle: Float?
+                if let azimuth0 = p0.azimuthAngle, let azimuth1 = p1.azimuthAngle {
+                    azimuthAngle = azimuth0 * Float(1 - t) + azimuth1 * Float(t)
+                } else {
+                    azimuthAngle = p0.azimuthAngle ?? p1.azimuthAngle
+                }
+
                 // Calculate velocity dynamics
                 let velocityMultipliers = calculateVelocityDynamics(velocity: velocity)
 
@@ -420,6 +447,9 @@ class EnhancedBrushEngine {
                 // Apply velocity size and tilt
                 dynamicBrush.scale *= velocityMultipliers.size * tiltMultipliers.size
 
+                // Calculate rotation based on mode (manual, fixed, or azimuth)
+                dynamicBrush.rotation = calculateRotation(azimuthAngle: azimuthAngle)
+
                 // Apply jitter
                 if config.jitter.enabled {
                     dynamicBrush.scale *= applyScaleJitter()
@@ -431,15 +461,6 @@ class EnhancedBrushEngine {
 
                 // Apply flow
                 dynamicBrush.opacity *= config.flow
-
-                // Calculate rotation from stroke direction
-                if i > 0 {
-                    let angle = atan2(
-                        p1.position.y - p0.position.y,
-                        p1.position.x - p0.position.x
-                    )
-                    dynamicBrush.rotation = Float(angle * 180.0 / .pi)
-                }
 
                 stamps.append(PatternStamp(
                     position: position,
@@ -525,6 +546,36 @@ class EnhancedBrushEngine {
         }
 
         return (sizeMultiplier, opacityMultiplier)
+    }
+
+    private func calculateRotation(azimuthAngle: Float?) -> Float {
+        let dynamics = config.rotationDynamics
+
+        switch dynamics.mode {
+        case .manual:
+            // Use the rotation from PatternBrush (no dynamic change)
+            return config.patternBrush.rotation
+
+        case .fixed:
+            // Use fixed rotation value
+            return dynamics.fixedRotation
+
+        case .followAzimuth:
+            // Rotate to follow Apple Pencil direction
+            guard let azimuth = azimuthAngle else {
+                return config.patternBrush.rotation
+            }
+
+            // Apply exponential smoothing to prevent jitter
+            if let prevAzimuth = smoothedAzimuth {
+                let alpha = 1.0 - dynamics.smoothing
+                smoothedAzimuth = alpha * azimuth + dynamics.smoothing * prevAzimuth
+            } else {
+                smoothedAzimuth = azimuth
+            }
+
+            return smoothedAzimuth ?? azimuth
+        }
     }
 
     // MARK: - Jitter
