@@ -281,6 +281,20 @@ class AdvancedBrushSettingsPanel: UIView {
         pressureCurveControl = UISegmentedControl(items: ["Linear", "Ease In", "Ease Out", "Ease In-Out"])
         pressureCurveControl.addTarget(self, action: #selector(pressureCurveChanged), for: .valueChanged)
         pressureSection.addArrangedSubview(pressureCurveControl)
+
+        // Edit Curve button
+        let editCurveButton = UIButton(type: .system)
+        editCurveButton.setTitle("✎ Edit Curve", for: .normal)
+        editCurveButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 14, weight: .medium)
+        editCurveButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        editCurveButton.backgroundColor = DesignTokens.Colors.surface
+        editCurveButton.layer.cornerRadius = 8
+        editCurveButton.layer.borderWidth = 1
+        editCurveButton.layer.borderColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.3).cgColor
+        editCurveButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        editCurveButton.addTarget(self, action: #selector(editCurveButtonTapped), for: .touchUpInside)
+        pressureSection.addArrangedSubview(editCurveButton)
+
         pressureSection.addArrangedSubview(createHelpLabel("How pressure input is mapped to output."))
         contentStack.addArrangedSubview(pressureSection)
 
@@ -512,6 +526,23 @@ class AdvancedBrushSettingsPanel: UIView {
         }
     }
 
+    @objc private func editCurveButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show pressure curve editor
+        let editor = PressureCurveEditorView()
+        editor.delegate = self
+        editor.configure(with: currentConfig.pressureCurve.curveType)
+
+        if let parentView = superview {
+            editor.present(in: parentView)
+        }
+
+        print("✎ Opening pressure curve editor")
+    }
+
     @objc private func applyButtonTapped() {
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.impactOccurred()
@@ -567,6 +598,40 @@ class AdvancedBrushSettingsPanel: UIView {
                 self.removeFromSuperview()
             }
         )
+    }
+}
+
+// MARK: - PressureCurveEditorDelegate
+
+extension AdvancedBrushSettingsPanel: PressureCurveEditorDelegate {
+    func pressureCurveEditor(_ editor: PressureCurveEditorView, didUpdateCurve curveType: BrushConfiguration.PressureCurve.CurveType) {
+        // Update configuration with new curve type
+        currentConfig.pressureCurve.curveType = curveType
+
+        // Update segmented control if it's a preset
+        switch curveType {
+        case .linear:
+            pressureCurveControl.selectedSegmentIndex = 0
+        case .easeIn:
+            pressureCurveControl.selectedSegmentIndex = 1
+        case .easeOut:
+            pressureCurveControl.selectedSegmentIndex = 2
+        case .easeInOut:
+            pressureCurveControl.selectedSegmentIndex = 3
+        case .custom:
+            // Custom curve - deselect all presets
+            pressureCurveControl.selectedSegmentIndex = UISegmentedControl.noSegment
+        }
+
+        // Dismiss editor
+        editor.dismiss()
+
+        print("✓ Updated pressure curve to: \(curveType)")
+    }
+
+    func pressureCurveEditorDidCancel(_ editor: PressureCurveEditorView) {
+        editor.dismiss()
+        print("❌ Pressure curve editor cancelled")
     }
 }
 
