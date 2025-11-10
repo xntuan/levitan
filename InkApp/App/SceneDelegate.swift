@@ -20,7 +20,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window = UIWindow(windowScene: windowScene)
 
         // Set root view controller
-        let canvasViewController = CanvasViewController()
+        // Use EnhancedCanvasViewController for full drawing functionality
+        let canvasViewController = EnhancedCanvasViewController()
         window?.rootViewController = canvasViewController
         window?.makeKeyAndVisible()
     }
