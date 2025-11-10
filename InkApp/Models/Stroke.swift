@@ -26,11 +26,15 @@ struct StrokePoint: Codable {
     var position: CGPoint
     var pressure: Float       // 0-1, from Apple Pencil or default to 1.0
     var timestamp: TimeInterval
+    var tiltAngle: Float?     // 0-90°, altitude angle from Apple Pencil (optional)
+    var azimuthAngle: Float?  // 0-360°, direction angle from Apple Pencil (optional)
 
-    init(position: CGPoint, pressure: Float = 1.0, timestamp: TimeInterval = Date().timeIntervalSince1970) {
+    init(position: CGPoint, pressure: Float = 1.0, timestamp: TimeInterval = Date().timeIntervalSince1970, tiltAngle: Float? = nil, azimuthAngle: Float? = nil) {
         self.position = position
         self.pressure = pressure
         self.timestamp = timestamp
+        self.tiltAngle = tiltAngle
+        self.azimuthAngle = azimuthAngle
     }
 }
 

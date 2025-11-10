@@ -36,6 +36,19 @@ struct BrushConfiguration {
     // Flow
     var flow: Float = 1.0  // 0-1, affects build-up
 
+    // Tilt (Apple Pencil)
+    var tiltDynamics: TiltDynamics = TiltDynamics()
+
+    struct TiltDynamics {
+        var enabled: Bool = false
+        var affectsSize: Bool = true
+        var affectsOpacity: Bool = false
+        var sizeSensitivity: Float = 0.5   // 0-1, how much tilt affects size
+        var opacitySensitivity: Float = 0.3  // 0-1, how much tilt affects opacity
+        var minimumTilt: Float = 0.0   // 0-90°, angle below which max effect
+        var maximumTilt: Float = 90.0  // 0-90°, angle above which no effect
+    }
+
     struct VelocityDynamics {
         var enabled: Bool = true
         var sizeMin: Float = 0.7   // Size multiplier at high velocity
@@ -146,9 +159,15 @@ class EnhancedBrushEngine {
 
     // MARK: - Stroke Management
 
-    func beginStroke(at point: CGPoint, pressure: Float = 1.0, layerId: UUID) {
+    func beginStroke(at point: CGPoint, pressure: Float = 1.0, layerId: UUID, tiltAngle: Float? = nil, azimuthAngle: Float? = nil) {
         let timestamp = Date().timeIntervalSince1970
-        let strokePoint = StrokePoint(position: point, pressure: pressure, timestamp: timestamp)
+        let strokePoint = StrokePoint(
+            position: point,
+            pressure: pressure,
+            timestamp: timestamp,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
 
         currentStroke = Stroke(points: [strokePoint], brush: config.patternBrush, layerId: layerId)
 
@@ -163,11 +182,17 @@ class EnhancedBrushEngine {
         print("🖌️ Enhanced brush stroke began")
     }
 
-    func addPoint(_ point: CGPoint, pressure: Float = 1.0) {
+    func addPoint(_ point: CGPoint, pressure: Float = 1.0, tiltAngle: Float? = nil, azimuthAngle: Float? = nil) {
         guard var stroke = currentStroke else { return }
 
         let timestamp = Date().timeIntervalSince1970
-        let strokePoint = StrokePoint(position: point, pressure: pressure, timestamp: timestamp)
+        let strokePoint = StrokePoint(
+            position: point,
+            pressure: pressure,
+            timestamp: timestamp,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
 
         // Add to raw points
         rawPoints.append(strokePoint)
@@ -370,8 +395,19 @@ class EnhancedBrushEngine {
                 // Apply pressure curve
                 let curvedPressure = config.pressureCurve.apply(pressure)
 
+                // Interpolate tilt angle (if available)
+                let tiltAngle: Float?
+                if let tilt0 = p0.tiltAngle, let tilt1 = p1.tiltAngle {
+                    tiltAngle = tilt0 * Float(1 - t) + tilt1 * Float(t)
+                } else {
+                    tiltAngle = p0.tiltAngle ?? p1.tiltAngle
+                }
+
                 // Calculate velocity dynamics
                 let velocityMultipliers = calculateVelocityDynamics(velocity: velocity)
+
+                // Calculate tilt dynamics
+                let tiltMultipliers = calculateTiltDynamics(tiltAngle: tiltAngle)
 
                 // Apply jitter
                 if config.jitter.enabled {
@@ -381,16 +417,16 @@ class EnhancedBrushEngine {
                 // Create modified brush with dynamics
                 var dynamicBrush = config.patternBrush
 
-                // Apply velocity size
-                dynamicBrush.scale *= velocityMultipliers.size
+                // Apply velocity size and tilt
+                dynamicBrush.scale *= velocityMultipliers.size * tiltMultipliers.size
 
                 // Apply jitter
                 if config.jitter.enabled {
                     dynamicBrush.scale *= applyScaleJitter()
                     dynamicBrush.rotation += applyRotationJitter()
-                    dynamicBrush.opacity *= velocityMultipliers.opacity * applyOpacityJitter()
+                    dynamicBrush.opacity *= velocityMultipliers.opacity * tiltMultipliers.opacity * applyOpacityJitter()
                 } else {
-                    dynamicBrush.opacity *= velocityMultipliers.opacity
+                    dynamicBrush.opacity *= velocityMultipliers.opacity * tiltMultipliers.opacity
                 }
 
                 // Apply flow
@@ -448,6 +484,45 @@ class EnhancedBrushEngine {
 
         // Inverse for opacity (slower = more opaque)
         let opacityMultiplier = dynamics.opacityMax - (dynamics.opacityMax - dynamics.opacityMin) * normalizedVelocity
+
+        return (sizeMultiplier, opacityMultiplier)
+    }
+
+    private func calculateTiltDynamics(tiltAngle: Float?) -> (size: Float, opacity: Float) {
+        guard config.tiltDynamics.enabled,
+              let tilt = tiltAngle else {
+            return (1.0, 1.0)
+        }
+
+        let dynamics = config.tiltDynamics
+
+        // Clamp tilt to configured range
+        let clampedTilt = max(dynamics.minimumTilt, min(dynamics.maximumTilt, tilt))
+
+        // Normalize tilt (0 = flat, 1 = perpendicular)
+        // tilt is in degrees (0-90°)
+        let tiltRange = dynamics.maximumTilt - dynamics.minimumTilt
+        guard tiltRange > 0 else { return (1.0, 1.0) }
+
+        let normalizedTilt = (clampedTilt - dynamics.minimumTilt) / tiltRange
+
+        // Apply tilt effects
+        var sizeMultiplier: Float = 1.0
+        var opacityMultiplier: Float = 1.0
+
+        if dynamics.affectsSize {
+            // Flat pencil (0°) = full effect, perpendicular (90°) = no effect
+            let tiltPercent = 1.0 - normalizedTilt
+            sizeMultiplier = 1.0 - (tiltPercent * dynamics.sizeSensitivity)
+            sizeMultiplier = max(0.1, sizeMultiplier) // Minimum 10% size
+        }
+
+        if dynamics.affectsOpacity {
+            // Flat pencil (0°) = full effect, perpendicular (90°) = no effect
+            let tiltPercent = 1.0 - normalizedTilt
+            opacityMultiplier = 1.0 - (tiltPercent * dynamics.opacitySensitivity)
+            opacityMultiplier = max(0.1, opacityMultiplier) // Minimum 10% opacity
+        }
 
         return (sizeMultiplier, opacityMultiplier)
     }

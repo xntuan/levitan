@@ -177,8 +177,17 @@ class EnhancedCanvasViewController: UIViewController {
         let canvasPoint = viewToCanvasPoint(point)
         let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
 
+        // Read Apple Pencil tilt and azimuth (if available)
+        let tiltAngle = Float(touch.altitudeAngle * 180.0 / .pi) // Convert radians to degrees (0-90°)
+        let azimuthAngle = Float(touch.azimuthAngle(in: metalView) * 180.0 / .pi) // Convert radians to degrees (0-360°)
+
         // Add point to stroke
-        brushEngine.addPoint(canvasPoint, pressure: pressure)
+        brushEngine.addPoint(
+            canvasPoint,
+            pressure: pressure,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
 
         // Real-time rendering: draw pattern stamps
         if let currentStroke = brushEngine.currentStroke {
@@ -874,7 +883,17 @@ class EnhancedCanvasViewController: UIViewController {
         let canvasPoint = viewToCanvasPoint(point)
         let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
 
-        brushEngine.beginStroke(at: canvasPoint, pressure: pressure, layerId: activeLayer.id)
+        // Read Apple Pencil tilt and azimuth (if available)
+        let tiltAngle = Float(touch.altitudeAngle * 180.0 / .pi) // Convert radians to degrees (0-90°)
+        let azimuthAngle = Float(touch.azimuthAngle(in: metalView) * 180.0 / .pi) // Convert radians to degrees (0-360°)
+
+        brushEngine.beginStroke(
+            at: canvasPoint,
+            pressure: pressure,
+            layerId: activeLayer.id,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
         isDrawing = true
 
         print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint)")
