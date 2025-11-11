@@ -318,6 +318,13 @@ struct ChallengeParticipation: Codable, Identifiable {
 
     mutating func updateProgress(worksCompleted: Int, required: Int) {
         self.worksCompleted = worksCompleted
+
+        // Prevent division by zero
+        guard required > 0 else {
+            self.progress = 0.0
+            return
+        }
+
         self.progress = Float(worksCompleted) / Float(required)
 
         if worksCompleted >= required {

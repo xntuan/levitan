@@ -82,8 +82,18 @@ class ChallengeManager {
     // MARK: - Participation
 
     /// Join a challenge
-    func joinChallenge(challengeID: UUID, userID: String) -> ChallengeParticipation {
-        var challenge = challenges[challengeID]!
+    func joinChallenge(challengeID: UUID, userID: String) -> ChallengeParticipation? {
+        guard var challenge = challenges[challengeID] else {
+            print("❌ Challenge not found: \(challengeID)")
+            return nil
+        }
+
+        // Check if already joined
+        if hasJoined(challengeID: challengeID, userID: userID) {
+            print("⚠️ User already joined this challenge")
+            return getParticipation(challengeID: challengeID, userID: userID)
+        }
+
         challenge.participantCount += 1
         challenges[challengeID] = challenge
 
@@ -111,17 +121,20 @@ class ChallengeManager {
     /// Update participation progress
     func updateProgress(challengeID: UUID, userID: String, worksCompleted: Int) {
         guard var challenge = challenges[challengeID],
-              let index = participations[challengeID]?.firstIndex(where: { $0.userID == userID }) else {
+              var challengeParticipations = participations[challengeID],
+              let index = challengeParticipations.firstIndex(where: { $0.userID == userID }) else {
+            print("❌ Cannot update progress: challenge or participation not found")
             return
         }
 
-        var participation = participations[challengeID]![index]
+        var participation = challengeParticipations[index]
         participation.updateProgress(
             worksCompleted: worksCompleted,
             required: challenge.requirements.minWorks
         )
 
-        participations[challengeID]![index] = participation
+        challengeParticipations[index] = participation
+        participations[challengeID] = challengeParticipations
         onParticipationUpdated?(participation)
 
         print("📊 Challenge progress: \(Int(participation.progress * 100))%")

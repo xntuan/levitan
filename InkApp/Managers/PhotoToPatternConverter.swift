@@ -415,6 +415,14 @@ class PhotoToPatternConverter {
         let numerator = abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x)
         let denominator = sqrt(dx * dx + dy * dy)
 
+        // Prevent division by zero when start == end (zero-length line)
+        guard denominator > 0 else {
+            // Return distance to the point
+            let distX = point.x - lineStart.x
+            let distY = point.y - lineStart.y
+            return sqrt(distX * distX + distY * distY)
+        }
+
         return numerator / denominator
     }
 

@@ -61,10 +61,18 @@ class DailyContentManager {
         let daysSinceEpoch = Int(date.timeIntervalSince1970 / 86400)
 
         // Select template (rotate through pool)
+        guard !templatePool.isEmpty else {
+            print("❌ No templates available for daily content")
+            return createFallbackContent(for: date)
+        }
         let templateIndex = daysSinceEpoch % templatePool.count
         let freeTemplate = templatePool[templateIndex]
 
         // Select tip
+        guard !tips.isEmpty else {
+            print("❌ No tips available")
+            return createContentWithoutTip(for: date, template: freeTemplate)
+        }
         let tipIndex = daysSinceEpoch % tips.count
         let tip = tips[tipIndex]
 
@@ -295,5 +303,52 @@ class DailyContentManager {
     /// Mark today as accessed
     func markTodayAccessed() {
         userDefaults.set(Date(), forKey: lastAccessKey)
+    }
+
+    // MARK: - Fallback Methods
+
+    /// Create fallback content when no templates available
+    private func createFallbackContent(for date: Date) -> DailyContent {
+        // Create a minimal placeholder template
+        let placeholderTemplate = Template(
+            id: UUID(),
+            name: "Placeholder",
+            category: .geometric,
+            difficulty: .beginner,
+            thumbnailName: "",
+            svgPath: "",
+            estimatedTime: 10,
+            primaryTechnique: .stippling
+        )
+
+        return DailyContent(
+            date: date,
+            freeTemplate: placeholderTemplate,
+            challenge: nil,
+            tipOfTheDay: "No tips available today",
+            streakBonus: StreakBonus(currentStreak: 0, bonus: 0, extraTemplates: [])
+        )
+    }
+
+    /// Create content without tip
+    private func createContentWithoutTip(for date: Date, template: Template) -> DailyContent {
+        let daysSinceEpoch = Int(date.timeIntervalSince1970 / 86400)
+
+        let challenge: DailyChallenge?
+        if daysSinceEpoch % 3 == 0 {
+            challenge = generateChallenge(for: date)
+        } else {
+            challenge = nil
+        }
+
+        let streakBonus = calculateStreakBonus()
+
+        return DailyContent(
+            date: date,
+            freeTemplate: template,
+            challenge: challenge,
+            tipOfTheDay: "Keep creating amazing pattern art!",
+            streakBonus: streakBonus
+        )
     }
 }

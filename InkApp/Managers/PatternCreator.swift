@@ -218,6 +218,11 @@ class PatternCreator {
             }
 
         case .radial(let count, let radius, let angleOffset):
+            guard count > 0 else {
+                print("⚠️ Radial arrangement requires count > 0")
+                break
+            }
+
             for i in 0..<count {
                 let angle = (Float(i) / Float(count)) * 360.0 + angleOffset
                 let rad = CGFloat(angle * .pi / 180)
@@ -235,6 +240,11 @@ class PatternCreator {
             }
 
         case .spiral(let count, let spacing, let rotation):
+            guard count > 0 else {
+                print("⚠️ Spiral arrangement requires count > 0")
+                break
+            }
+
             for i in 0..<count {
                 let t = Float(i) / Float(count)
                 let angle = t * 360.0 * rotation
