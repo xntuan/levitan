@@ -72,6 +72,7 @@ class BrushSettingsPanel: UIView {
     private var spacingSlider: SliderControl!
     private var opacitySlider: SliderControl!
     private var scaleSlider: SliderControl!
+    private var densitySlider: SliderControl!
 
     // Buttons
     private let applyButton: UIButton = {
@@ -169,7 +170,7 @@ class BrushSettingsPanel: UIView {
             containerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: trailingAnchor),
             containerView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            containerView.heightAnchor.constraint(equalToConstant: 520),
+            containerView.heightAnchor.constraint(equalToConstant: 584),
 
             // Handle bar
             handleBar.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 12),
@@ -274,6 +275,19 @@ class BrushSettingsPanel: UIView {
         containerView.addSubview(scaleSlider)
         scaleSlider.translatesAutoresizingMaskIntoConstraints = false
 
+        // Density slider (0.0-1.0)
+        densitySlider = SliderControl(
+            title: "Density",
+            minValue: 0.0,
+            maxValue: 1.0,
+            currentValue: currentBrush.density,
+            unit: "",
+            decimalPlaces: 2
+        )
+        densitySlider.delegate = self
+        containerView.addSubview(densitySlider)
+        densitySlider.translatesAutoresizingMaskIntoConstraints = false
+
         // Layout sliders
         NSLayoutConstraint.activate([
             rotationSlider.topAnchor.constraint(equalTo: previewContainer.bottomAnchor, constant: 24),
@@ -290,7 +304,11 @@ class BrushSettingsPanel: UIView {
 
             scaleSlider.topAnchor.constraint(equalTo: opacitySlider.bottomAnchor, constant: 16),
             scaleSlider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            scaleSlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20)
+            scaleSlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
+            densitySlider.topAnchor.constraint(equalTo: scaleSlider.bottomAnchor, constant: 16),
+            densitySlider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            densitySlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20)
         ])
     }
 
@@ -327,54 +345,29 @@ class BrushSettingsPanel: UIView {
     }
 
     private func generatePatternGeometry(center: CGPoint) -> PatternGeometry {
-        switch currentBrush.type {
-        case .parallelLines:
-            let lines = PatternGenerator.generateParallelLines(
-                center: center,
-                rotation: currentBrush.rotation,
-                spacing: currentBrush.spacing * currentBrush.scale,
-                length: 40 * currentBrush.scale,
-                count: 7
-            )
-            return .lines(lines)
+        // Use the unified pattern generator with density support
+        let patternGeom = PatternGenerator.generatePattern(
+            type: currentBrush.type,
+            center: center,
+            rotation: currentBrush.rotation,
+            spacing: currentBrush.spacing,
+            scale: currentBrush.scale,
+            density: currentBrush.density
+        )
 
-        case .crossHatch:
-            let lines = PatternGenerator.generateCrossHatch(
-                center: center,
-                rotation: currentBrush.rotation,
-                spacing: currentBrush.spacing * currentBrush.scale,
-                length: 40 * currentBrush.scale
-            )
-            return .lines(lines)
-
-        case .dots:
-            let circles = PatternGenerator.generateDots(
-                center: center,
-                spacing: currentBrush.spacing * currentBrush.scale,
-                radius: 2 * currentBrush.scale,
-                gridSize: 5
-            )
-            return .circles(circles)
-
-        case .contourLines:
-            let arcs = PatternGenerator.generateContourLines(
-                center: center,
-                spacing: currentBrush.spacing * currentBrush.scale,
-                count: 5
-            )
-            return .arcs(arcs)
-
-        case .waves:
-            let waves = PatternGenerator.generateWaves(
-                center: center,
-                spacing: currentBrush.spacing * currentBrush.scale,
-                amplitude: 3 * currentBrush.scale,
-                wavelength: 20,
-                count: 5,
-                width: 80
-            )
-            return .waves(waves)
+        // Convert to local enum for drawing
+        if !patternGeom.lines.isEmpty {
+            return .lines(patternGeom.lines)
+        } else if !patternGeom.circles.isEmpty {
+            return .circles(patternGeom.circles)
+        } else if !patternGeom.arcs.isEmpty {
+            return .arcs(patternGeom.arcs)
+        } else if !patternGeom.waves.isEmpty {
+            return .waves(patternGeom.waves)
         }
+
+        // Fallback to empty lines
+        return .lines([])
     }
 
     private enum PatternGeometry {
@@ -476,7 +469,7 @@ class BrushSettingsPanel: UIView {
         view.addSubview(self)
 
         // Initial state: container off-screen
-        containerView.transform = CGAffineTransform(translationX: 0, y: 520)
+        containerView.transform = CGAffineTransform(translationX: 0, y: 584)
         dimView.alpha = 0
 
         // Animate in
@@ -500,7 +493,7 @@ class BrushSettingsPanel: UIView {
             delay: 0,
             options: .curveEaseIn,
             animations: {
-                self.containerView.transform = CGAffineTransform(translationX: 0, y: 520)
+                self.containerView.transform = CGAffineTransform(translationX: 0, y: 584)
                 self.dimView.alpha = 0
             },
             completion: { _ in
@@ -524,6 +517,10 @@ extension BrushSettingsPanel: SliderControlDelegate {
             currentBrush.opacity = value / 100.0
         case scaleSlider:
             currentBrush.scale = value
+        case densitySlider:
+            currentBrush.density = value
+            // Also update the densityConfig base density
+            currentBrush.densityConfig.baseDensity = value
         default:
             break
         }

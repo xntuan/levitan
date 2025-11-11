@@ -9,6 +9,38 @@
 import UIKit
 import CoreGraphics
 
+/// Technique used in pattern drawing
+enum PatternTechnique: String, Codable, CaseIterable {
+    case stippling = "Stippling"
+    case hatching = "Hatching"
+    case crossHatching = "Cross-Hatching"
+    case contourHatching = "Contour Hatching"
+    case mixed = "Mixed Techniques"
+    case waves = "Wave Patterns"
+
+    var icon: String {
+        switch self {
+        case .stippling: return "⚫️"
+        case .hatching: return "📏"
+        case .crossHatching: return "✖️"
+        case .contourHatching: return "🌊"
+        case .mixed: return "🎨"
+        case .waves: return "〰️"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .stippling: return "Create shading with individual dots"
+        case .hatching: return "Parallel lines create tone"
+        case .crossHatching: return "Overlapping lines for depth"
+        case .contourHatching: return "Lines follow the form"
+        case .mixed: return "Combination of multiple techniques"
+        case .waves: return "Organic wave patterns"
+        }
+    }
+}
+
 /// Represents an artwork template with pre-defined layers and metadata
 struct Template: Codable, Identifiable {
 
@@ -26,6 +58,18 @@ struct Template: Codable, Identifiable {
     var thumbnailImageName: String
     var baseImageName: String
     var layerDefinitions: [LayerDefinition]
+
+    // NEW: Pattern-specific metadata
+    var primaryTechnique: PatternTechnique
+    var suggestedColors: [PatternBrush.Color]
+
+    // NEW: Artist attribution
+    var artistName: String?
+    var artistBio: String?
+
+    // NEW: Daily content system
+    var isDaily: Bool
+    var unlockDate: Date?  // When this template becomes available
 
     // Metadata
     var createdAt: Date
@@ -132,6 +176,12 @@ struct Template: Codable, Identifiable {
         thumbnailImageName: String,
         baseImageName: String,
         layerDefinitions: [LayerDefinition],
+        primaryTechnique: PatternTechnique = .mixed,
+        suggestedColors: [PatternBrush.Color] = [.black],
+        artistName: String? = nil,
+        artistBio: String? = nil,
+        isDaily: Bool = false,
+        unlockDate: Date? = nil,
         createdAt: Date = Date(),
         isFeatured: Bool = false,
         isLocked: Bool = false
@@ -146,6 +196,12 @@ struct Template: Codable, Identifiable {
         self.thumbnailImageName = thumbnailImageName
         self.baseImageName = baseImageName
         self.layerDefinitions = layerDefinitions.sorted { $0.order < $1.order }
+        self.primaryTechnique = primaryTechnique
+        self.suggestedColors = suggestedColors
+        self.artistName = artistName
+        self.artistBio = artistBio
+        self.isDaily = isDaily
+        self.unlockDate = unlockDate
         self.createdAt = createdAt
         self.isFeatured = isFeatured
         self.isLocked = isLocked

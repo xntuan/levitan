@@ -159,15 +159,27 @@ class PatternGenerator {
 
     // MARK: - Pattern Rendering Helpers
 
-    /// Convert pattern to drawable paths
+    /// Convert pattern to drawable paths with density control
     static func generatePattern(
         type: PatternBrush.PatternType,
         center: CGPoint,
         rotation: Float,
         spacing: Float,
-        scale: Float
+        scale: Float,
+        density: Float = 0.5
     ) -> PatternGeometry {
-        let adjustedSpacing = spacing * scale
+        // Density modulates both spacing and count
+        // Low density (0.0) = wider spacing, fewer elements
+        // High density (1.0) = tighter spacing, more elements
+
+        // Spacing: inverse relationship (0.0 density = 2x spacing, 1.0 = 0.5x spacing)
+        let densitySpacingMultiplier = 2.0 - (density * 1.5)
+        let adjustedSpacing = spacing * scale * densitySpacingMultiplier
+
+        // Count: direct relationship (0.0 density = 3 elements, 1.0 = 15 elements)
+        let baseCount = 7
+        let densityCountMultiplier = 0.5 + (density * 1.5)  // 0.5 to 2.0
+        let adjustedCount = max(3, Int(Float(baseCount) * densityCountMultiplier))
 
         switch type {
         case .parallelLines:
@@ -175,7 +187,8 @@ class PatternGenerator {
                 center: center,
                 rotation: rotation,
                 spacing: adjustedSpacing,
-                length: 20.0 * scale
+                length: 20.0 * scale,
+                count: adjustedCount
             )
             return PatternGeometry(lines: lines)
 
@@ -184,22 +197,26 @@ class PatternGenerator {
                 center: center,
                 rotation: rotation,
                 spacing: adjustedSpacing,
-                length: 20.0 * scale
+                length: 20.0 * scale,
+                count: adjustedCount
             )
             return PatternGeometry(lines: lines)
 
         case .dots:
+            let gridSize = max(2, Int(Float(5) * densityCountMultiplier))
             let circles = generateDots(
                 center: center,
                 spacing: adjustedSpacing,
-                radius: 2.0 * scale
+                radius: 2.0 * scale,
+                gridSize: gridSize
             )
             return PatternGeometry(circles: circles)
 
         case .contourLines:
             let arcs = generateContourLines(
                 center: center,
-                spacing: adjustedSpacing
+                spacing: adjustedSpacing,
+                count: adjustedCount
             )
             return PatternGeometry(arcs: arcs)
 
@@ -209,6 +226,7 @@ class PatternGenerator {
                 spacing: adjustedSpacing,
                 amplitude: 3.0 * scale,
                 wavelength: 20.0 * scale,
+                count: adjustedCount,
                 width: 40.0 * scale
             )
             return PatternGeometry(waves: waves)
