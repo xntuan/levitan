@@ -52,8 +52,9 @@ class ThemeBookGalleryViewController: UIViewController {
     }
 
     private func loadThemeBooks() {
-        // Load all theme books
-        themeBooks = ThemeBook.createSampleThemeBooks()
+        // Load templates first, then create theme books with assignments
+        let templates = Template.createSampleTemplates()
+        themeBooks = ThemeBook.createSampleThemeBooks(from: templates)
 
         // Sort: featured first, then by order
         themeBooks.sort { book1, book2 in
@@ -406,30 +407,5 @@ class ThemeBookCollectionViewCell: UICollectionViewCell {
         ) {
             self.transform = .identity
         }
-    }
-}
-
-// MARK: - UIColor Extensions
-
-extension UIColor {
-    func lighter(by percentage: CGFloat = 0.3) -> UIColor? {
-        return self.adjust(by: abs(percentage))
-    }
-
-    func darker(by percentage: CGFloat = 0.3) -> UIColor? {
-        return self.adjust(by: -abs(percentage))
-    }
-
-    func adjust(by percentage: CGFloat) -> UIColor? {
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        if self.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
-            return UIColor(
-                red: min(red + percentage, 1.0),
-                green: min(green + percentage, 1.0),
-                blue: min(blue + percentage, 1.0),
-                alpha: alpha
-            )
-        }
-        return nil
     }
 }

@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import UniformTypeIdentifiers
 
 class AdminPanelViewController: UIViewController {
 
@@ -502,7 +503,7 @@ class AdminPanelViewController: UIViewController {
 
     private func loadData() {
         templates = Template.createSampleTemplates()
-        themeBooks = ThemeBook.createSampleThemeBooks()
+        themeBooks = ThemeBook.createSampleThemeBooks(from: templates)
     }
 
     // MARK: - Actions

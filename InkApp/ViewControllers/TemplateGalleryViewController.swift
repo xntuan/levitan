@@ -73,8 +73,8 @@ class TemplateGalleryViewController: UIViewController {
     }
 
     private func loadThemeBooks() {
-        // Load theme books
-        themeBooks = ThemeBook.createSampleThemeBooks()
+        // Load theme books with template assignments
+        themeBooks = ThemeBook.createSampleThemeBooks(from: templates)
 
         // Filter to featured theme books only
         themeBooks = themeBooks.filter { $0.isFeatured }.sorted { $0.order < $1.order }
