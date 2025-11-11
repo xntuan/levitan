@@ -74,6 +74,17 @@ class FirebaseManager {
     func signIn(email: String, password: String, completion: @escaping (Result<UserProfile, FirebaseError>) -> Void) {
         // Production: Auth.auth().signIn(withEmail:password:)
 
+        // Input validation
+        guard !email.isEmpty && email.contains("@") && email.count >= 3 else {
+            completion(.failure(.invalidCredentials))
+            return
+        }
+
+        guard !password.isEmpty && password.count >= 6 else {
+            completion(.failure(.invalidCredentials))
+            return
+        }
+
         // Mock implementation
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { [weak self] in
             let userID = email.hashValue.description
@@ -99,6 +110,22 @@ class FirebaseManager {
     /// Sign up with email and password
     func signUp(email: String, password: String, username: String, displayName: String, completion: @escaping (Result<UserProfile, FirebaseError>) -> Void) {
         // Production: Auth.auth().createUser(withEmail:password:)
+
+        // Input validation
+        guard !email.isEmpty && email.contains("@") && email.count >= 3 else {
+            completion(.failure(.invalidCredentials))
+            return
+        }
+
+        guard !password.isEmpty && password.count >= 6 else {
+            completion(.failure(.invalidCredentials))
+            return
+        }
+
+        guard !displayName.isEmpty && displayName.count <= 50 else {
+            completion(.failure(.unknown("Display name must be 1-50 characters")))
+            return
+        }
 
         // Validate username
         guard UserProfile.isValidUsername(username) else {
@@ -390,12 +417,19 @@ class FirebaseManager {
             return
         }
 
+        // Input validation
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty && trimmedText.count <= 500 else {
+            completion(.failure(.unknown("Comment must be 1-500 characters")))
+            return
+        }
+
         let comment = ArtworkComment(
             artworkID: artworkID,
             userID: user.id,
             username: user.username,
             avatarURL: user.avatarURL,
-            text: text
+            text: trimmedText
         )
 
         var artworkComments = comments[artworkID] ?? []

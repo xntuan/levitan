@@ -50,6 +50,16 @@ class PhotoToPatternConverter {
             guard let self = self else { return }
 
             do {
+                // Input validation
+                guard image.size.width > 0 && image.size.height > 0 else {
+                    throw ConversionError.invalidImage
+                }
+
+                // Prevent memory allocation failures with huge images
+                guard image.size.width <= 4096 && image.size.height <= 4096 else {
+                    throw ConversionError.imageTooLarge
+                }
+
                 // Step 1: Prepare image
                 self.updateProgress(0.1, "Preparing image...")
                 guard let cgImage = image.cgImage else {

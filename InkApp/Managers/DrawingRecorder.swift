@@ -145,6 +145,22 @@ class DrawingRecorder {
             return
         }
 
+        // Input validation
+        guard fps > 0 && fps <= 120 else {
+            completion(.failure(.exportFailed("Invalid FPS: must be 1-120")))
+            return
+        }
+
+        guard speedMultiplier > 0 && speedMultiplier <= 100 else {
+            completion(.failure(.exportFailed("Invalid speed multiplier: must be 0.1-100")))
+            return
+        }
+
+        guard resolution.width > 0 && resolution.height > 0 else {
+            completion(.failure(.exportFailed("Invalid resolution")))
+            return
+        }
+
         print("📹 Exporting video: \(frames.count) frames at \(fps)fps, \(speedMultiplier)x speed")
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
