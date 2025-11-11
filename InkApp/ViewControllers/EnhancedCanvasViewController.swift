@@ -145,6 +145,7 @@ class EnhancedCanvasViewController: UIViewController {
 
         addBrushPalette()
         addUndoRedoButtons()
+        addEraserToggle()  // Add eraser/draw mode toggle
         addCompleteButton()
         addBackButton()  // Back to gallery (replaces library button)
         addProgressLabel()  // Show current layer and progress
@@ -453,6 +454,52 @@ class EnhancedCanvasViewController: UIViewController {
         redoButton.layer.cornerRadius = 8
         redoButton.addTarget(self, action: #selector(redoButtonTapped), for: .touchUpInside)
         view.addSubview(redoButton)
+    }
+
+    // MARK: - Eraser Toggle
+
+    private func addEraserToggle() {
+        let eraserButton = UIButton(type: .system)
+        eraserButton.frame = CGRect(
+            x: 20,
+            y: view.bounds.height - 150,
+            width: 100,
+            height: 44
+        )
+        eraserButton.setTitle("🖌️ Draw", for: .normal)
+        eraserButton.backgroundColor = DesignTokens.Colors.surface
+        eraserButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        eraserButton.layer.cornerRadius = 22
+        eraserButton.layer.shadowColor = UIColor.black.cgColor
+        eraserButton.layer.shadowOpacity = 0.2
+        eraserButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        eraserButton.layer.shadowRadius = 8
+        eraserButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 15, weight: .semibold)
+        eraserButton.tag = 999  // Use tag to identify this button
+        eraserButton.addTarget(self, action: #selector(eraserToggleTapped), for: .touchUpInside)
+        view.addSubview(eraserButton)
+    }
+
+    @objc private func eraserToggleTapped(_ sender: UIButton) {
+        // Toggle eraser mode
+        brushEngine.config.isEraserMode.toggle()
+
+        // Update button appearance
+        if brushEngine.config.isEraserMode {
+            sender.setTitle("🧹 Erase", for: .normal)
+            sender.backgroundColor = DesignTokens.Colors.inkPrimary
+            sender.setTitleColor(.white, for: .normal)
+            print("✏️ Switched to ERASER mode")
+        } else {
+            sender.setTitle("🖌️ Draw", for: .normal)
+            sender.backgroundColor = DesignTokens.Colors.surface
+            sender.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+            print("🖌️ Switched to DRAW mode")
+        }
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
     }
 
     @objc private func undoButtonTapped() {

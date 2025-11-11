@@ -17,6 +17,7 @@ import simd
 struct BrushConfiguration {
     // Basic settings
     var patternBrush: PatternBrush
+    var isEraserMode: Bool = false  // When true, erases instead of drawing
 
     // Stabilization (0-100)
     var stabilization: Float = 30.0  // 0 = none, 100 = maximum smoothing
@@ -187,7 +188,7 @@ class EnhancedBrushEngine {
             azimuthAngle: azimuthAngle
         )
 
-        currentStroke = Stroke(points: [strokePoint], brush: config.patternBrush, layerId: layerId)
+        currentStroke = Stroke(points: [strokePoint], brush: config.patternBrush, layerId: layerId, isEraserMode: config.isEraserMode)
 
         rawPoints = [strokePoint]
         smoothedPoints = [strokePoint]

@@ -13,11 +13,13 @@ struct Stroke: Codable {
     var points: [StrokePoint]
     var brush: PatternBrush
     var layerId: UUID
+    var isEraserMode: Bool  // When true, this stroke erases instead of draws
 
-    init(points: [StrokePoint] = [], brush: PatternBrush, layerId: UUID) {
+    init(points: [StrokePoint] = [], brush: PatternBrush, layerId: UUID, isEraserMode: Bool = false) {
         self.points = points
         self.brush = brush
         self.layerId = layerId
+        self.isEraserMode = isEraserMode
     }
 }
 

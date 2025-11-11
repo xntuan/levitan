@@ -140,7 +140,8 @@ class BrushEngine {
                 stamps.append(PatternStamp(
                     position: position,
                     brush: stroke.brush,
-                    pressure: pressure
+                    pressure: pressure,
+                    isEraserMode: stroke.isEraserMode
                 ))
             }
         }
@@ -171,4 +172,5 @@ struct PatternStamp {
     let position: CGPoint
     let brush: PatternBrush
     let pressure: Float
+    let isEraserMode: Bool  // When true, erases instead of drawing
 }

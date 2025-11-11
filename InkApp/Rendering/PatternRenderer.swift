@@ -76,12 +76,26 @@ class PatternRenderer {
             scale: stamp.brush.scale
         )
 
+        // For eraser mode, use transparent color (alpha 0) to erase
+        let finalColor: PatternBrush.Color
+        let finalOpacity: Float
+
+        if stamp.isEraserMode {
+            // Eraser: render with alpha 0 to erase pixels
+            finalColor = PatternBrush.Color(red: 0, green: 0, blue: 0, alpha: 0)
+            finalOpacity = 1.0  // Full strength eraser
+        } else {
+            // Normal drawing mode
+            finalColor = stamp.brush.color
+            finalOpacity = stamp.brush.opacity * stamp.pressure
+        }
+
         // Render geometry
         renderGeometry(
             geometry,
             to: texture,
-            color: stamp.brush.color,
-            opacity: stamp.brush.opacity * stamp.pressure,
+            color: finalColor,
+            opacity: finalOpacity,
             canvasSize: canvasSize,
             commandBuffer: commandBuffer
         )
