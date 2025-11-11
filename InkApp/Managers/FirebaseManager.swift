@@ -30,9 +30,42 @@ class FirebaseManager {
     private var comments: [UUID: [ArtworkComment]] = [:]
     private var follows: [String: [UserFollow]] = [:]
 
+    // Thread synchronization queue to prevent race conditions
+    private let syncQueue = DispatchQueue(label: "com.ink.firebase.sync", attributes: .concurrent)
+
     private init() {
         // Initialize Firebase in production:
         // FirebaseApp.configure()
+    }
+
+    // MARK: - Thread-Safe Access Helpers
+
+    /// Thread-safe write to users dictionary
+    private func writeUser(_ user: UserProfile, forKey key: String) {
+        syncQueue.async(flags: .barrier) { [weak self] in
+            self?.users[key] = user
+        }
+    }
+
+    /// Thread-safe read from users dictionary
+    private func readUser(forKey key: String) -> UserProfile? {
+        return syncQueue.sync {
+            return users[key]
+        }
+    }
+
+    /// Thread-safe write to artworks dictionary
+    private func writeArtwork(_ artwork: GalleryArtwork, forKey key: UUID) {
+        syncQueue.async(flags: .barrier) { [weak self] in
+            self?.artworks[key] = artwork
+        }
+    }
+
+    /// Thread-safe read from artworks dictionary
+    private func readArtwork(forKey key: UUID) -> GalleryArtwork? {
+        return syncQueue.sync {
+            return artworks[key]
+        }
     }
 
     // MARK: - Authentication
@@ -73,8 +106,12 @@ class FirebaseManager {
             return
         }
 
-        // Check if username is taken (mock)
-        if users.values.contains(where: { $0.username == username }) {
+        // Check if username is taken (thread-safe)
+        let usernameTaken = syncQueue.sync {
+            return users.values.contains(where: { $0.username == username })
+        }
+
+        if usernameTaken {
             completion(.failure(.usernameTaken))
             return
         }
@@ -91,7 +128,7 @@ class FirebaseManager {
 
             self?.currentUser = profile
             self?.isAuthenticated = true
-            self?.users[userID] = profile
+            self?.writeUser(profile, forKey: userID)
 
             DispatchQueue.main.async {
                 self?.onAuthStateChanged?(profile)
@@ -274,9 +311,15 @@ class FirebaseManager {
             return
         }
 
-        let like = ArtworkLike(artworkID: artworkID, userID: userID)
-
+        // Prevent duplicate likes
         var artworkLikes = likes[artworkID] ?? []
+        if artworkLikes.contains(where: { $0.userID == userID }) {
+            print("⚠️ User already liked this artwork")
+            completion(.success(()))  // Silently succeed (idempotent operation)
+            return
+        }
+
+        let like = ArtworkLike(artworkID: artworkID, userID: userID)
         artworkLikes.append(like)
         likes[artworkID] = artworkLikes
 

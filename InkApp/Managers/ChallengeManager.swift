@@ -20,6 +20,9 @@ class ChallengeManager {
     private var submissions: [UUID: [ChallengeSubmission]] = [:]
     private var votes: [UUID: [ChallengeVote]] = [:]
 
+    // Thread synchronization queue to prevent race conditions
+    private let syncQueue = DispatchQueue(label: "com.ink.challenge.sync", attributes: .concurrent)
+
     // Callbacks
     var onChallengeUpdated: ((Challenge) -> Void)?
     var onParticipationUpdated: ((ChallengeParticipation) -> Void)?
@@ -83,28 +86,32 @@ class ChallengeManager {
 
     /// Join a challenge
     func joinChallenge(challengeID: UUID, userID: String) -> ChallengeParticipation? {
-        guard var challenge = challenges[challengeID] else {
-            print("❌ Challenge not found: \(challengeID)")
-            return nil
+        // Thread-safe operation using barrier
+        return syncQueue.sync(flags: .barrier) { [weak self] in
+            guard let self = self else { return nil }
+            guard var challenge = self.challenges[challengeID] else {
+                print("❌ Challenge not found: \(challengeID)")
+                return nil
+            }
+
+            // Check if already joined
+            if let existing = self.participations[challengeID]?.first(where: { $0.userID == userID }) {
+                print("⚠️ User already joined this challenge")
+                return existing
+            }
+
+            challenge.participantCount += 1
+            self.challenges[challengeID] = challenge
+
+            let participation = ChallengeParticipation(challengeID: challengeID, userID: userID)
+
+            var challengeParticipations = self.participations[challengeID] ?? []
+            challengeParticipations.append(participation)
+            self.participations[challengeID] = challengeParticipations
+
+            print("✅ User joined challenge: \(challenge.title)")
+            return participation
         }
-
-        // Check if already joined
-        if hasJoined(challengeID: challengeID, userID: userID) {
-            print("⚠️ User already joined this challenge")
-            return getParticipation(challengeID: challengeID, userID: userID)
-        }
-
-        challenge.participantCount += 1
-        challenges[challengeID] = challenge
-
-        let participation = ChallengeParticipation(challengeID: challengeID, userID: userID)
-
-        var challengeParticipations = participations[challengeID] ?? []
-        challengeParticipations.append(participation)
-        participations[challengeID] = challengeParticipations
-
-        print("✅ User joined challenge: \(challenge.title)")
-        return participation
     }
 
     /// Check if user has joined a challenge
@@ -209,24 +216,36 @@ class ChallengeManager {
 
     /// Vote for a submission
     func voteForSubmission(submissionID: UUID, challengeID: UUID, userID: String) {
-        let vote = ChallengeVote(submissionID: submissionID, userID: userID)
+        // Thread-safe operation using barrier
+        syncQueue.sync(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
 
-        var submissionVotes = votes[submissionID] ?? []
-        submissionVotes.append(vote)
-        votes[submissionID] = submissionVotes
+            // Prevent duplicate votes
+            var submissionVotes = self.votes[submissionID] ?? []
+            if submissionVotes.contains(where: { $0.userID == userID }) {
+                print("⚠️ User already voted for this submission")
+                return
+            }
 
-        // Update submission vote count
-        if let index = submissions[challengeID]?.firstIndex(where: { $0.id == submissionID }) {
-            submissions[challengeID]![index].votes += 1
+            let vote = ChallengeVote(submissionID: submissionID, userID: userID)
+            submissionVotes.append(vote)
+            self.votes[submissionID] = submissionVotes
+
+            // Update submission vote count
+            if var challengeSubmissions = self.submissions[challengeID],
+               let index = challengeSubmissions.firstIndex(where: { $0.id == submissionID }) {
+                challengeSubmissions[index].votes += 1
+                self.submissions[challengeID] = challengeSubmissions
+            }
+
+            // Update challenge vote count
+            if var challenge = self.challenges[challengeID] {
+                challenge.voteCount += 1
+                self.challenges[challengeID] = challenge
+            }
+
+            print("👍 Voted for submission")
         }
-
-        // Update challenge vote count
-        if var challenge = challenges[challengeID] {
-            challenge.voteCount += 1
-            challenges[challengeID] = challenge
-        }
-
-        print("👍 Voted for submission")
     }
 
     /// Remove vote from submission

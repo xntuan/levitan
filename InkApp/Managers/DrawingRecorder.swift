@@ -34,6 +34,7 @@ class DrawingRecorder {
     var speedMultiplier: Float = 10.0   // 10x speed time-lapse
     var resolution: CGSize = CGSize(width: 1920, height: 1920)
     var quality: ExportQuality = .high
+    var maxFrames: Int = 3600           // Maximum frames to store (10 min at 1 frame/sec = 360, 1 hour = 3600)
 
     // Callbacks
     var onFrameCaptured: ((Int) -> Void)?
@@ -106,6 +107,12 @@ class DrawingRecorder {
     func captureFrame(texture: MTLTexture, strokeCount: Int) {
         guard isRecording && !isPaused else { return }
         guard let startTime = startTime else { return }
+
+        // Check frame limit to prevent unbounded memory growth
+        guard frames.count < maxFrames else {
+            print("⚠️ Maximum frame limit reached (\(maxFrames)). Skipping frame.")
+            return
+        }
 
         // Calculate timestamp (excluding paused time)
         let timestamp = Date().timeIntervalSince(startTime) - totalPausedTime

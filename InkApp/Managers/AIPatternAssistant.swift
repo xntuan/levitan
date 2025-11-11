@@ -25,9 +25,11 @@ class AIPatternAssistant {
     var onSuggestionAvailable: ((PatternSuggestion) -> Void)?
     var onAnalysisComplete: ((ArtworkAnalysis) -> Void)?
 
-    // Analysis cache
+    // Analysis cache (with limits to prevent unbounded memory growth)
     private var recentSuggestions: [PatternSuggestion] = []
     private var analysisHistory: [UUID: ArtworkAnalysis] = [:]
+    private let maxRecentSuggestions: Int = 50         // Keep only last 50 suggestions
+    private let maxAnalysisHistory: Int = 100          // Keep only last 100 analyses
 
     private init() {}
 
@@ -109,7 +111,12 @@ class AIPatternAssistant {
             timestamp: Date()
         )
 
+        // Add suggestion and enforce limit
         recentSuggestions.append(suggestion)
+        if recentSuggestions.count > maxRecentSuggestions {
+            recentSuggestions.removeFirst(recentSuggestions.count - maxRecentSuggestions)
+        }
+
         onSuggestionAvailable?(suggestion)
 
         return suggestion
@@ -314,7 +321,18 @@ class AIPatternAssistant {
             timestamp: Date()
         )
 
+        // Add analysis and enforce limit
         analysisHistory[template.id] = analysis
+        if analysisHistory.count > maxAnalysisHistory {
+            // Remove oldest entries (by timestamp)
+            let sortedKeys = analysisHistory.keys.sorted {
+                (analysisHistory[$0]?.timestamp ?? Date()) < (analysisHistory[$1]?.timestamp ?? Date())
+            }
+            for key in sortedKeys.prefix(analysisHistory.count - maxAnalysisHistory) {
+                analysisHistory.removeValue(forKey: key)
+            }
+        }
+
         onAnalysisComplete?(analysis)
 
         return analysis
