@@ -273,6 +273,9 @@ class FirebaseManager {
     ) {
         // Production: Firestore query with filters
 
+        // Input validation
+        let validLimit = max(1, min(limit, 100))  // Clamp to 1-100
+
         var results = Array(artworks.values)
 
         // Apply filters
@@ -303,7 +306,7 @@ class FirebaseManager {
             results.sort { $0.views > $1.views }
         }
 
-        let limited = Array(results.prefix(limit))
+        let limited = Array(results.prefix(validLimit))
         completion(.success(limited))
     }
 

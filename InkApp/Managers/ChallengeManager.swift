@@ -47,11 +47,14 @@ class ChallengeManager {
 
     /// Get ended challenges
     func getEndedChallenges(limit: Int = 10) -> [Challenge] {
+        // Input validation
+        let validLimit = max(1, min(limit, 100))  // Clamp to 1-100
+
         let now = Date()
         return challenges.values
             .filter { $0.endDate < now }
             .sorted { $0.endDate > $1.endDate }
-            .prefix(limit)
+            .prefix(validLimit)
             .map { $0 }
     }
 
