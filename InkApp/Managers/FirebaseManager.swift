@@ -298,7 +298,26 @@ class FirebaseManager {
             return
         }
 
+        // Validate ownership before deletion
+        guard let artwork = artworks[artworkID] else {
+            completion(.failure(.artworkNotFound))
+            return
+        }
+
+        guard artwork.creatorID == currentUser?.id else {
+            completion(.failure(.permissionDenied))
+            return
+        }
+
         artworks.removeValue(forKey: artworkID)
+
+        // Update user stats
+        if var user = currentUser {
+            user.totalWorks = max(0, user.totalWorks - 1)
+            currentUser = user
+            users[user.id] = user
+        }
+
         completion(.success(()))
     }
 

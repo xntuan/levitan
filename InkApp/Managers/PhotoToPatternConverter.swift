@@ -259,9 +259,13 @@ class PhotoToPatternConverter {
                 if visited[y][x] { continue }
 
                 let index = (y * width + x) * 4
-                guard index < pixelData.count else { continue }
+                guard index + 2 < pixelData.count else { continue }
 
-                let intensity = pixelData[index]
+                // Calculate proper grayscale intensity using luminance formula
+                let r = Float(pixelData[index])
+                let g = Float(pixelData[index + 1])
+                let b = Float(pixelData[index + 2])
+                let intensity = UInt8(0.299 * r + 0.587 * g + 0.114 * b)
 
                 if intensity > threshold {
                     // Found an edge pixel - trace path
@@ -319,9 +323,13 @@ class PhotoToPatternConverter {
                 guard !visited[ny][nx] else { continue }
 
                 let index = (ny * width + nx) * 4
-                guard index < pixelData.count else { continue }
+                guard index + 2 < pixelData.count else { continue }
 
-                let intensity = pixelData[index]
+                // Calculate proper grayscale intensity using luminance formula
+                let r = Float(pixelData[index])
+                let g = Float(pixelData[index + 1])
+                let b = Float(pixelData[index + 2])
+                let intensity = UInt8(0.299 * r + 0.587 * g + 0.114 * b)
 
                 if intensity > threshold {
                     currentPoint = CGPoint(x: nx, y: ny)

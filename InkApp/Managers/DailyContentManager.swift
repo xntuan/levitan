@@ -43,14 +43,14 @@ class DailyContentManager {
             return cached
         }
 
+        // Update streak BEFORE generating content (so bonus is calculated correctly)
+        updateStreak()
+
         // Generate new daily content
         let content = generateDailyContent(for: today)
 
         // Cache it
         cacheContent(content)
-
-        // Update streak
-        updateStreak()
 
         return content
     }

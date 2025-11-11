@@ -186,8 +186,9 @@ class ChallengeManager {
             challenges[challengeID] = challenge
         }
 
-        // Update participation
-        updateProgress(challengeID: challengeID, userID: userID, worksCompleted: 1)
+        // Update participation - count total submissions by this user
+        let userSubmissionCount = challengeSubmissions.filter { $0.userID == userID }.count
+        updateProgress(challengeID: challengeID, userID: userID, worksCompleted: userSubmissionCount)
 
         print("🎨 Artwork submitted to challenge")
         return submission
