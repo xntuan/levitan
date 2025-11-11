@@ -251,6 +251,17 @@ class EnhancedMetalRenderer: NSObject {
         return compositeLayersForDisplay()
     }
 
+    /// Get the texture for a specific layer
+    func getLayerTexture(for layerId: UUID) -> MTLTexture? {
+        return layerTextures[layerId]
+    }
+
+    /// Replace a layer's texture with a new one
+    func replaceLayerTexture(layerId: UUID, with texture: MTLTexture) {
+        layerTextures[layerId] = texture
+        print("✅ Replaced texture for layer \(layerId)")
+    }
+
     // MARK: - Helper Methods
 
     /// Create a white mask texture (fully opaque)

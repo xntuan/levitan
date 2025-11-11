@@ -64,6 +64,55 @@ fragment float4 pattern_fragment(
     return color;
 }
 
+// MARK: - Brush Rendering Shaders (Solid Brush/Marker)
+
+struct BrushVertex {
+    float2 position;
+    float2 uv;
+};
+
+struct BrushVertexOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+struct BrushUniforms {
+    float4 color;      // RGBA
+    float hardness;    // 0=soft, 1=hard
+};
+
+// Brush vertex shader
+vertex BrushVertexOut brush_vertex(
+    uint vertexID [[vertex_id]],
+    constant BrushVertex *vertices [[buffer(0)]]
+) {
+    BrushVertexOut out;
+    out.position = float4(vertices[vertexID].position, 0.0, 1.0);
+    out.uv = vertices[vertexID].uv;
+    return out;
+}
+
+// Brush fragment shader with circular gradient
+fragment float4 brush_fragment(
+    BrushVertexOut in [[stage_in]],
+    constant BrushUniforms &uniforms [[buffer(0)]]
+) {
+    // Calculate distance from center (UV coordinates range from 0-1)
+    float2 center = float2(0.5, 0.5);
+    float dist = distance(in.uv, center) * 2.0; // Scale to 0-1 (radius)
+
+    // Apply hardness to create soft or hard edges
+    // hardness=1.0: sharp edge, hardness=0.0: very soft edge
+    float edge = smoothstep(uniforms.hardness, 1.0, dist);
+    float alpha = 1.0 - edge;
+
+    // Apply alpha to color
+    float4 color = uniforms.color;
+    color.a *= alpha;
+
+    return color;
+}
+
 // MARK: - Layer Compositing Shaders
 
 struct CompositeVertexOut {

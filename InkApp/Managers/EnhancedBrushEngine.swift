@@ -19,6 +19,12 @@ struct BrushConfiguration {
     var patternBrush: PatternBrush
     var isEraserMode: Bool = false  // When true, erases instead of drawing
 
+    // Tool type and configurations
+    var currentTool: DrawingTool = .pattern
+    var brushConfig: BrushToolConfig = BrushToolConfig()
+    var markerConfig: MarkerToolConfig = MarkerToolConfig()
+    var fillBucketConfig: FillBucketConfig = FillBucketConfig()
+
     // Stabilization (0-100)
     var stabilization: Float = 30.0  // 0 = none, 100 = maximum smoothing
 
@@ -466,7 +472,103 @@ class EnhancedBrushEngine {
                 stamps.append(PatternStamp(
                     position: position,
                     brush: dynamicBrush,
-                    pressure: curvedPressure
+                    pressure: curvedPressure,
+                    isEraserMode: stroke.isEraserMode
+                ))
+            }
+        }
+
+        return stamps
+    }
+
+    /// Generate brush/marker stamps along a stroke (for solid painting)
+    func generateBrushStamps(for stroke: Stroke) -> [BrushStamp] {
+        var stamps: [BrushStamp] = []
+        guard stroke.points.count >= 2 else { return stamps }
+
+        // Get the appropriate tool config
+        let toolConfig: (size: Float, opacity: Float, hardness: Float, spacing: Float, color: PatternBrush.Color)
+
+        switch config.currentTool {
+        case .brush:
+            let brush = config.brushConfig
+            toolConfig = (
+                size: brush.size,
+                opacity: brush.opacity,
+                hardness: brush.hardness,
+                spacing: brush.spacing * brush.size, // Spacing as fraction of size
+                color: brush.color
+            )
+        case .marker:
+            let marker = config.markerConfig
+            toolConfig = (
+                size: marker.size,
+                opacity: marker.opacity,
+                hardness: marker.hardness,
+                spacing: marker.spacing * marker.size,
+                color: marker.color
+            )
+        default:
+            return stamps // Other tools don't use brush stamps
+        }
+
+        // Use combined points (smoothed + predicted)
+        let allPoints = smoothedPoints + predictedPoints
+
+        var distanceTraveled: CGFloat = 0
+        var lastStampDistance: CGFloat = 0
+
+        for i in 1..<allPoints.count {
+            let p0 = allPoints[i - 1]
+            let p1 = allPoints[i]
+
+            let segmentDistance = distance(from: p0.position, to: p1.position)
+            distanceTraveled += segmentDistance
+
+            // Place stamps along segment
+            while distanceTraveled - lastStampDistance >= CGFloat(toolConfig.spacing) {
+                lastStampDistance += CGFloat(toolConfig.spacing)
+
+                let t = (lastStampDistance - (distanceTraveled - segmentDistance)) / segmentDistance
+                let position = interpolate(from: p0.position, to: p1.position, t: t)
+
+                // Interpolate pressure
+                let pressure = p0.pressure * Float(1 - t) + p1.pressure * Float(t)
+
+                // Apply pressure curve
+                let curvedPressure = config.pressureCurve.apply(pressure)
+
+                // Calculate final size and opacity based on pressure and tool config
+                var finalSize = toolConfig.size
+                var finalOpacity = toolConfig.opacity
+
+                if config.currentTool == .brush {
+                    let brush = config.brushConfig
+                    if brush.pressureAffectsSize {
+                        let sizeMultiplier = brush.minSize + (1.0 - brush.minSize) * curvedPressure
+                        finalSize *= sizeMultiplier
+                    }
+                    if brush.pressureAffectsOpacity {
+                        let opacityMultiplier = brush.minOpacity + (1.0 - brush.minOpacity) * curvedPressure
+                        finalOpacity *= opacityMultiplier
+                    }
+                } else if config.currentTool == .marker {
+                    let marker = config.markerConfig
+                    // Markers typically don't vary size with pressure
+                    if marker.pressureAffectsOpacity {
+                        let opacityMultiplier = marker.minOpacity + (1.0 - marker.minOpacity) * curvedPressure
+                        finalOpacity *= opacityMultiplier
+                    }
+                }
+
+                stamps.append(BrushStamp(
+                    position: position,
+                    size: finalSize,
+                    opacity: finalOpacity,
+                    hardness: toolConfig.hardness,
+                    color: toolConfig.color,
+                    isEraser: config.isEraserMode,
+                    tool: config.currentTool
                 ))
             }
         }

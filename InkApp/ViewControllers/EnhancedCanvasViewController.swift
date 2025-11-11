@@ -18,6 +18,8 @@ class EnhancedCanvasViewController: UIViewController {
 
     // Managers and Engine
     var renderer: EnhancedMetalRenderer!
+    var solidBrushRenderer: SolidBrushRenderer?
+    var floodFillEngine: FloodFillEngine?
     var layerManager: LayerManager!
     var brushEngine: EnhancedBrushEngine!
     var undoManager: DrawingUndoManager!
@@ -110,6 +112,12 @@ class EnhancedCanvasViewController: UIViewController {
         // Initialize enhanced renderer
         renderer = EnhancedMetalRenderer(metalView: metalView, layerManager: layerManager)
 
+        // Initialize solid brush renderer (for brush/marker tools)
+        if let device = metalView.device, let commandQueue = renderer.commandQueue {
+            solidBrushRenderer = SolidBrushRenderer(device: device, commandQueue: commandQueue)
+            floodFillEngine = FloodFillEngine(device: device, commandQueue: commandQueue)
+        }
+
         // Configure view
         metalView.clearColor = MTLClearColor(red: 0.97, green: 0.98, blue: 0.98, alpha: 1)
         metalView.colorPixelFormat = .bgra8Unorm
@@ -145,7 +153,7 @@ class EnhancedCanvasViewController: UIViewController {
 
         addBrushPalette()
         addUndoRedoButtons()
-        addEraserToggle()  // Add eraser/draw mode toggle
+        addToolSelector()  // Add tool selector (pattern, brush, marker, fill, eraser)
         addCompleteButton()
         addBackButton()  // Back to gallery (replaces library button)
         addProgressLabel()  // Show current layer and progress
@@ -203,13 +211,25 @@ class EnhancedCanvasViewController: UIViewController {
             azimuthAngle: azimuthAngle
         )
 
-        // Real-time rendering: draw pattern stamps
+        // Real-time rendering based on tool type
         if let currentStroke = brushEngine.currentStroke {
-            let stamps = brushEngine.generatePatternStamps(for: currentStroke)
+            switch brushEngine.config.currentTool {
+            case .pattern, .eraser:
+                // Pattern-based rendering
+                let stamps = brushEngine.generatePatternStamps(for: currentStroke)
+                let recentStamps = Array(stamps.suffix(5))
+                renderer.drawPatternStamps(recentStamps)
 
-            // Draw only recent stamps (last 5 for performance)
-            let recentStamps = Array(stamps.suffix(5))
-            renderer.drawPatternStamps(recentStamps)
+            case .brush, .marker:
+                // Solid brush rendering
+                let brushStamps = brushEngine.generateBrushStamps(for: currentStroke)
+                let recentBrushStamps = Array(brushStamps.suffix(5))
+                drawBrushStamps(recentBrushStamps)
+
+            case .fillBucket:
+                // Fill bucket is tap-based, not drag-based
+                break
+            }
         }
     }
 
@@ -218,16 +238,27 @@ class EnhancedCanvasViewController: UIViewController {
 
         // End stroke
         if let completedStroke = brushEngine.endStroke() {
-            // Generate all pattern stamps
-            let stamps = brushEngine.generatePatternStamps(for: completedStroke)
+            // Render based on tool type
+            switch brushEngine.config.currentTool {
+            case .pattern, .eraser:
+                // Generate and render pattern stamps
+                let stamps = brushEngine.generatePatternStamps(for: completedStroke)
+                renderer.drawPatternStamps(stamps)
+                print("✅ Pattern stroke completed with \(completedStroke.points.count) points, \(stamps.count) stamps")
 
-            // Render to layer
-            renderer.drawPatternStamps(stamps)
+            case .brush, .marker:
+                // Generate and render brush stamps
+                let brushStamps = brushEngine.generateBrushStamps(for: completedStroke)
+                drawBrushStamps(brushStamps)
+                print("✅ \(brushEngine.config.currentTool.displayName) stroke completed with \(completedStroke.points.count) points, \(brushStamps.count) stamps")
+
+            case .fillBucket:
+                // Fill bucket is tap-based, handled in touchesBegan
+                break
+            }
 
             // Record for undo
             undoManager.recordStroke(completedStroke)
-
-            print("✅ Stroke completed with \(completedStroke.points.count) points, \(stamps.count) stamps")
         }
 
         isDrawing = false
@@ -458,48 +489,103 @@ class EnhancedCanvasViewController: UIViewController {
 
     // MARK: - Eraser Toggle
 
-    private func addEraserToggle() {
-        let eraserButton = UIButton(type: .system)
-        eraserButton.frame = CGRect(
-            x: 20,
-            y: view.bounds.height - 150,
-            width: 100,
-            height: 44
-        )
-        eraserButton.setTitle("🖌️ Draw", for: .normal)
-        eraserButton.backgroundColor = DesignTokens.Colors.surface
-        eraserButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
-        eraserButton.layer.cornerRadius = 22
-        eraserButton.layer.shadowColor = UIColor.black.cgColor
-        eraserButton.layer.shadowOpacity = 0.2
-        eraserButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        eraserButton.layer.shadowRadius = 8
-        eraserButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 15, weight: .semibold)
-        eraserButton.tag = 999  // Use tag to identify this button
-        eraserButton.addTarget(self, action: #selector(eraserToggleTapped), for: .touchUpInside)
-        view.addSubview(eraserButton)
+    // MARK: - Tool Selector UI
+
+    private func addToolSelector() {
+        // Create horizontal toolbar for tools
+        let toolbarHeight: CGFloat = 60
+        let toolbarY = view.bounds.height - 150
+        let buttonSize: CGFloat = 50
+        let spacing: CGFloat = 10
+        let tools: [DrawingTool] = [.pattern, .brush, .marker, .fillBucket, .eraser]
+
+        let toolbarWidth = CGFloat(tools.count) * (buttonSize + spacing) - spacing
+        let toolbarX = (view.bounds.width - toolbarWidth) / 2
+
+        // Create container view for tool buttons
+        let toolbarContainer = UIView(frame: CGRect(
+            x: toolbarX,
+            y: toolbarY,
+            width: toolbarWidth,
+            height: toolbarHeight
+        ))
+        toolbarContainer.tag = 998 // Tag for later reference
+        view.addSubview(toolbarContainer)
+
+        // Create button for each tool
+        for (index, tool) in tools.enumerated() {
+            let button = UIButton(type: .system)
+            button.frame = CGRect(
+                x: CGFloat(index) * (buttonSize + spacing),
+                y: 0,
+                width: buttonSize,
+                height: buttonSize
+            )
+
+            // Style button
+            button.setTitle(tool.icon, for: .normal)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 24)
+            button.backgroundColor = DesignTokens.Colors.surface
+            button.layer.cornerRadius = 25
+            button.layer.shadowColor = UIColor.black.cgColor
+            button.layer.shadowOpacity = 0.2
+            button.layer.shadowOffset = CGSize(width: 0, height: 2)
+            button.layer.shadowRadius = 4
+
+            // Highlight current tool
+            if tool == brushEngine.config.currentTool {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.tintColor = .white
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.tintColor = DesignTokens.Colors.inkPrimary
+            }
+
+            // Set tag to identify tool
+            button.tag = 1000 + index
+            button.accessibilityLabel = tool.displayName
+
+            // Add action
+            button.addTarget(self, action: #selector(toolButtonTapped), for: .touchUpInside)
+
+            toolbarContainer.addSubview(button)
+        }
     }
 
-    @objc private func eraserToggleTapped(_ sender: UIButton) {
-        // Toggle eraser mode
-        brushEngine.config.isEraserMode.toggle()
+    @objc private func toolButtonTapped(_ sender: UIButton) {
+        let toolIndex = sender.tag - 1000
+        let tools: [DrawingTool] = [.pattern, .brush, .marker, .fillBucket, .eraser]
 
-        // Update button appearance
-        if brushEngine.config.isEraserMode {
-            sender.setTitle("🧹 Erase", for: .normal)
-            sender.backgroundColor = DesignTokens.Colors.inkPrimary
-            sender.setTitleColor(.white, for: .normal)
-            print("✏️ Switched to ERASER mode")
-        } else {
-            sender.setTitle("🖌️ Draw", for: .normal)
-            sender.backgroundColor = DesignTokens.Colors.surface
-            sender.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
-            print("🖌️ Switched to DRAW mode")
+        guard toolIndex >= 0 && toolIndex < tools.count else { return }
+
+        let selectedTool = tools[toolIndex]
+
+        // Update brush engine configuration
+        brushEngine.config.currentTool = selectedTool
+
+        // Update eraser mode if eraser tool selected
+        brushEngine.config.isEraserMode = (selectedTool == .eraser)
+
+        // Update button appearances
+        if let toolbar = view.viewWithTag(998) {
+            for (index, _) in tools.enumerated() {
+                if let button = toolbar.viewWithTag(1000 + index) as? UIButton {
+                    if index == toolIndex {
+                        button.backgroundColor = DesignTokens.Colors.inkPrimary
+                        button.tintColor = .white
+                    } else {
+                        button.backgroundColor = DesignTokens.Colors.surface
+                        button.tintColor = DesignTokens.Colors.inkPrimary
+                    }
+                }
+            }
         }
 
         // Haptic feedback
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.impactOccurred()
+
+        print("🎨 Switched to \(selectedTool.displayName) tool")
     }
 
     @objc private func undoButtonTapped() {
@@ -1040,6 +1126,14 @@ class EnhancedCanvasViewController: UIViewController {
 
         let point = touch.location(in: metalView)
         let canvasPoint = viewToCanvasPoint(point)
+
+        // Handle fill bucket tool (tap-based)
+        if brushEngine.config.currentTool == .fillBucket {
+            handleFillBucketTap(at: canvasPoint, layerId: activeLayer.id)
+            return
+        }
+
+        // For other tools (brush, marker, pattern, eraser) - normal stroke handling
         let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
 
         // Read Apple Pencil tilt and azimuth (if available)
@@ -1055,7 +1149,75 @@ class EnhancedCanvasViewController: UIViewController {
         )
         isDrawing = true
 
-        print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint)")
+        print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint) with \(brushEngine.config.currentTool.displayName) tool")
+    }
+
+    // MARK: - Tool-Specific Rendering
+
+    /// Draw brush stamps using SolidBrushRenderer
+    private func drawBrushStamps(_ stamps: [BrushStamp]) {
+        guard let solidBrushRenderer = solidBrushRenderer,
+              let activeLayer = layerManager.activeLayer,
+              let layerTexture = renderer.getLayerTexture(for: activeLayer.id),
+              let commandBuffer = renderer.commandQueue.makeCommandBuffer() else {
+            print("❌ Failed to get resources for brush rendering")
+            return
+        }
+
+        // Render each stamp
+        for stamp in stamps {
+            solidBrushRenderer.renderBrushStamp(
+                position: stamp.position,
+                size: stamp.size,
+                hardness: stamp.hardness,
+                color: stamp.color,
+                opacity: stamp.opacity,
+                to: layerTexture,
+                canvasSize: canvasSize,
+                commandBuffer: commandBuffer,
+                isEraser: stamp.isEraser
+            )
+        }
+
+        // Commit the command buffer
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        // Trigger redraw
+        metalView.setNeedsDisplay()
+    }
+
+    /// Handle fill bucket tool tap
+    private func handleFillBucketTap(at point: CGPoint, layerId: UUID) {
+        guard let floodFillEngine = floodFillEngine,
+              let layerTexture = renderer.getLayerTexture(for: layerId) else {
+            print("❌ Failed to get resources for fill bucket")
+            showAlert("Fill bucket not available", title: "Error")
+            return
+        }
+
+        let config = brushEngine.config.fillBucketConfig
+
+        print("🪣 Fill bucket at \(point) with tolerance \(config.tolerance)")
+
+        // Perform flood fill
+        if let filledTexture = floodFillEngine.floodFill(
+            texture: layerTexture,
+            at: point,
+            fillColor: config.color,
+            tolerance: config.tolerance,
+            contiguous: config.contiguous
+        ) {
+            // Replace layer texture with filled texture
+            renderer.replaceLayerTexture(layerId: layerId, with: filledTexture)
+
+            // Trigger redraw
+            metalView.setNeedsDisplay()
+
+            print("✅ Fill bucket complete")
+        } else {
+            print("ℹ️ Fill bucket had no effect")
+        }
     }
 }
 
