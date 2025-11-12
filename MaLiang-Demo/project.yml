@@ -1,0 +1,22 @@
+name: MaLiangDemo
+
+options:
+  bundleIdPrefix: com.ink
+  deploymentTarget:
+    iOS: "13.0"
+
+targets:
+  MaLiangDemo:
+    type: application
+    platform: iOS
+    sources:
+      - MaLiangDemo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ink.MaLiangDemo
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "P23787K5H9"
+        INFOPLIST_FILE: MaLiangDemo/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "13.0"

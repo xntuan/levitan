@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -96,7 +96,7 @@
 		07B22D23E58DC211900E3DEF /* Challenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Challenge.swift; sourceTree = "<group>"; };
 		0A6533FA5C12B03F0BED2E27 /* BrushPresetsLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPresetsLibrary.swift; sourceTree = "<group>"; };
 		0C4D73F445F26DC0B2F1BD9D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
-		14E67513D7ED347458AA50DD /* InkTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = InkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		14E67513D7ED347458AA50DD /* InkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		194015D2E36C8D9F3C2831FB /* PhotoToPatternConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToPatternConverter.swift; sourceTree = "<group>"; };
 		1A339FD1DC9CDC5B3D3C0815 /* ThemeBookTemplatesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeBookTemplatesViewController.swift; sourceTree = "<group>"; };
 		241311203FB0AE21739BD62D /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
@@ -117,7 +117,7 @@
 		48B2835BD000119FD05EC016 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		4A55E01CD1C7362D596EEFDF /* PatternRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternRenderer.swift; sourceTree = "<group>"; };
 		4AA408673D63CF51F5506073 /* MetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRenderer.swift; sourceTree = "<group>"; };
-		560F8A160920F3DEC461B2B6 /* Ink.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ink.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		560F8A160920F3DEC461B2B6 /* Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ink.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		576FE89B90AB1E75F120E705 /* DailyContentManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyContentManager.swift; sourceTree = "<group>"; };
 		584086C9C5A7E0C9587A3C4E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		5B7A540781E37F0C6050EFA0 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
@@ -405,7 +405,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1400;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					AD5572C833509F93411AFE87 = {
 						DevelopmentTeam = P23787K5H9;
@@ -423,7 +423,6 @@
 			);
 			mainGroup = CFAE848F8D51802F1948B2E7;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -562,6 +561,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -583,6 +583,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -707,6 +708,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -721,6 +723,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
