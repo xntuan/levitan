@@ -1,0 +1,1499 @@
+//
+//  EnhancedCanvasViewController.swift
+//  Ink - Pattern Drawing App
+//
+//  Enhanced canvas with full drawing integration
+//  Created on November 10, 2025.
+//
+
+import UIKit
+import MetalKit
+
+class EnhancedCanvasViewController: UIViewController {
+
+    // MARK: - Properties
+
+    // View
+    var metalView: MTKView!
+
+    // Managers and Engine
+    var renderer: EnhancedMetalRenderer!
+    var solidBrushRenderer: SolidBrushRenderer?
+    var floodFillEngine: FloodFillEngine?
+    var layerManager: LayerManager!
+    var brushEngine: EnhancedBrushEngine!
+    var undoManager: DrawingUndoManager!
+
+    // Canvas state
+    var canvasSize: CGSize = CGSize(width: 2048, height: 2048)
+    var zoom: CGFloat = 1.0
+    var offset: CGPoint = .zero
+
+    // Drawing state
+    var isDrawing = false
+
+    // UI elements
+    private var brushButtons: [UIButton] = []
+    private var selectedBrushIndex = 0
+    private var debugLabel: UILabel?
+    private var layerSelectorView: LayerSelectorView!
+    private var brushPaletteView: UIView!
+    private var advancedSettingsButton: UIButton!
+    private var completeButton: UIButton!
+    private var libraryButton: UIButton!
+
+    // Auto-hide
+    private var autoHideTimer: Timer?
+    private var isUIVisible = true
+
+    // UI Mode
+    private var isSimpleMode = true  // Lake-like simplified UI (default)
+
+    // Completion tracking
+    private var artworkStartTime: Date?
+    private var currentTemplate: Template?
+    private var artworkProgress: ArtworkProgress?
+    private var progressLabel: UILabel?
+
+    // MARK: - Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupManagers()
+        setupMetalView()
+        setupGestures()
+        setupTestEnvironment()
+
+        // Start tracking artwork time
+        artworkStartTime = Date()
+    }
+
+    // MARK: - Setup
+
+    private func setupManagers() {
+        // Initialize layer manager with test layers
+        layerManager = LayerManager()
+
+        // Create test layers
+        let layer1 = Layer(name: "Sky", opacity: 1.0)
+        let layer2 = Layer(name: "Mountains", opacity: 1.0)
+        let layer3 = Layer(name: "Water", opacity: 1.0)
+
+        layerManager.addLayer(layer1)
+        layerManager.addLayer(layer2)
+        layerManager.addLayer(layer3)
+
+        // Select first layer
+        layerManager.selectLayer(at: 0)
+
+        // Initialize enhanced brush engine with default brush
+        let defaultBrush = PatternBrush(
+            type: .parallelLines,
+            rotation: 45,
+            spacing: 10,
+            opacity: 0.8,
+            scale: 1.0
+        )
+
+        // Use "Natural" preset as default
+        var config = BrushConfiguration.natural
+        config.patternBrush = defaultBrush
+        brushEngine = EnhancedBrushEngine(configuration: config)
+
+        // Initialize undo manager
+        undoManager = DrawingUndoManager(maxUndoLevels: 50)
+    }
+
+    private func setupMetalView() {
+        metalView = MTKView(frame: view.bounds)
+        metalView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(metalView)
+
+        // Initialize enhanced renderer
+        renderer = EnhancedMetalRenderer(metalView: metalView, layerManager: layerManager)
+
+        // Initialize solid brush renderer (for brush/marker tools)
+        if let device = metalView.device, let commandQueue = renderer.commandQueue {
+            solidBrushRenderer = SolidBrushRenderer(device: device, commandQueue: commandQueue)
+            floodFillEngine = FloodFillEngine(device: device, commandQueue: commandQueue)
+        }
+
+        // Configure view
+        metalView.clearColor = MTLClearColor(red: 0.97, green: 0.98, blue: 0.98, alpha: 1)
+        metalView.colorPixelFormat = .bgra8Unorm
+        metalView.framebufferOnly = false // Allow texture reading
+    }
+
+    private func setupGestures() {
+        // Pinch to zoom
+        let pinch = UIPinchGestureRecognizer(
+            target: self,
+            action: #selector(handlePinch(_:))
+        )
+        metalView.addGestureRecognizer(pinch)
+
+        // Two-finger pan
+        let pan = UIPanGestureRecognizer(
+            target: self,
+            action: #selector(handlePan(_:))
+        )
+        pan.minimumNumberOfTouches = 2
+        pan.maximumNumberOfTouches = 2
+        metalView.addGestureRecognizer(pan)
+    }
+
+    private func setupTestEnvironment() {
+        // Add test UI for debugging
+        addDebugInfo()
+
+        // In Simple Mode, layer selector is hidden by default
+        if !isSimpleMode {
+            addLayerSelector()
+        }
+
+        addBrushPalette()
+        addUndoRedoButtons()
+        addToolSelector()  // Add tool selector (pattern, brush, marker, fill, eraser)
+        addCompleteButton()
+        addBackButton()  // Back to gallery (replaces library button)
+        addProgressLabel()  // Show current layer and progress
+
+        // Start auto-hide timer
+        scheduleAutoHide()
+    }
+
+    // MARK: - Gesture Handlers
+
+    @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+        guard gesture.state == .changed else { return }
+
+        let newZoom = zoom * gesture.scale
+        zoom = max(0.5, min(4.0, newZoom))
+        gesture.scale = 1.0
+
+        print("Zoom: \(String(format: "%.2f", zoom))×")
+    }
+
+    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+        guard gesture.state == .changed else { return }
+
+        let translation = gesture.translation(in: metalView)
+        offset.x += translation.x
+        offset.y += translation.y
+        gesture.setTranslation(.zero, in: metalView)
+
+        print("Offset: (\(Int(offset.x)), \(Int(offset.y)))")
+    }
+
+    // MARK: - Touch Handling (Drawing)
+    // Note: touchesBegan is implemented below with auto-hide logic
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isDrawing,
+              touches.count == 1,
+              let touch = touches.first else {
+            return
+        }
+
+        let point = touch.location(in: metalView)
+        let canvasPoint = viewToCanvasPoint(point)
+        let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
+
+        // Read Apple Pencil tilt and azimuth (if available)
+        let tiltAngle = Float(touch.altitudeAngle * 180.0 / .pi) // Convert radians to degrees (0-90°)
+        let azimuthAngle = Float(touch.azimuthAngle(in: metalView) * 180.0 / .pi) // Convert radians to degrees (0-360°)
+
+        // Add point to stroke
+        brushEngine.addPoint(
+            canvasPoint,
+            pressure: pressure,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
+
+        // Real-time rendering based on tool type
+        if let currentStroke = brushEngine.currentStroke {
+            switch brushEngine.config.currentTool {
+            case .pattern, .eraser:
+                // Pattern-based rendering
+                let stamps = brushEngine.generatePatternStamps(for: currentStroke)
+                let recentStamps = Array(stamps.suffix(5))
+                renderer.drawPatternStamps(recentStamps)
+
+            case .brush, .marker:
+                // Solid brush rendering
+                let brushStamps = brushEngine.generateBrushStamps(for: currentStroke)
+                let recentBrushStamps = Array(brushStamps.suffix(5))
+                drawBrushStamps(recentBrushStamps)
+
+            case .fillBucket:
+                // Fill bucket is tap-based, not drag-based
+                break
+            }
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isDrawing else { return }
+
+        // End stroke
+        if let completedStroke = brushEngine.endStroke() {
+            // Render based on tool type
+            switch brushEngine.config.currentTool {
+            case .pattern, .eraser:
+                // Generate and render pattern stamps
+                let stamps = brushEngine.generatePatternStamps(for: completedStroke)
+                renderer.drawPatternStamps(stamps)
+                print("✅ Pattern stroke completed with \(completedStroke.points.count) points, \(stamps.count) stamps")
+
+            case .brush, .marker:
+                // Generate and render brush stamps
+                let brushStamps = brushEngine.generateBrushStamps(for: completedStroke)
+                drawBrushStamps(brushStamps)
+                print("✅ \(brushEngine.config.currentTool.displayName) stroke completed with \(completedStroke.points.count) points, \(brushStamps.count) stamps")
+
+            case .fillBucket:
+                // Fill bucket is tap-based, handled in touchesBegan
+                break
+            }
+
+            // Record for undo
+            undoManager.recordStroke(completedStroke)
+        }
+
+        isDrawing = false
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if isDrawing {
+            brushEngine.cancelStroke()
+            isDrawing = false
+            print("❌ Stroke cancelled")
+        }
+    }
+
+    // MARK: - Coordinate Conversion
+
+    /// Convert view coordinates to canvas coordinates
+    private func viewToCanvasPoint(_ viewPoint: CGPoint) -> CGPoint {
+        // Account for zoom and offset
+        let x = (viewPoint.x - offset.x) / zoom
+        let y = (viewPoint.y - offset.y) / zoom
+
+        // Map to canvas size
+        let canvasX = (x / metalView.bounds.width) * canvasSize.width
+        let canvasY = (y / metalView.bounds.height) * canvasSize.height
+
+        return CGPoint(x: canvasX, y: canvasY)
+    }
+
+    // MARK: - Brush Control
+
+    func changeBrush(type: PatternBrush.PatternType) {
+        brushEngine.config.patternBrush.type = type
+        print("🖌️ Brush changed to: \(type)")
+    }
+
+    func changeBrushRotation(_ degrees: Float) {
+        brushEngine.config.patternBrush.rotation = degrees
+        print("🔄 Brush rotation: \(degrees)°")
+    }
+
+    func changeBrushSpacing(_ spacing: Float) {
+        brushEngine.config.patternBrush.spacing = spacing
+        print("📏 Brush spacing: \(spacing)px")
+    }
+
+    // MARK: - Layer Control
+
+    func selectLayer(at index: Int) {
+        layerManager.selectLayer(at: index)
+        if let layer = layerManager.activeLayer {
+            print("📄 Selected layer: '\(layer.name)'")
+        }
+    }
+
+    func toggleLayerVisibility(at index: Int) {
+        layerManager.toggleLayerVisibility(at: index)
+        let layer = layerManager.layers[index]
+        print("👁️ Layer '\(layer.name)' visibility: \(layer.isVisible)")
+    }
+
+    func clearCurrentLayer() {
+        renderer.clearActiveLayer()
+        if let layer = layerManager.activeLayer {
+            print("🗑️ Cleared layer: '\(layer.name)'")
+        }
+    }
+
+    // MARK: - Debug UI
+
+    private func addDebugInfo() {
+        #if DEBUG
+        let label = UILabel()
+        label.frame = CGRect(x: 20, y: 50, width: 300, height: 100)
+        label.numberOfLines = 0
+        label.font = DesignTokens.Typography.systemFont(
+            size: DesignTokens.Typography.bodySmall,
+            weight: DesignTokens.Typography.regular
+        )
+        label.textColor = DesignTokens.Colors.textSecondary
+        label.backgroundColor = DesignTokens.Colors.surface.withAlphaComponent(0.9)
+        label.layer.cornerRadius = 8
+        label.layer.masksToBounds = true
+        label.textAlignment = .left
+        label.text = """
+        🎨 Ink Drawing App
+        📄 Layer: \(layerManager.activeLayer?.name ?? "None")
+        🖌️ Brush: Parallel Lines
+        👆 Tap to draw
+        """
+
+        debugLabel = label
+        view.addSubview(label)
+        #endif
+    }
+
+    private func updateDebugInfo() {
+        #if DEBUG
+        guard let label = debugLabel,
+              let activeLayer = layerManager.activeLayer else { return }
+
+        let brushName = buttonName(for: brushEngine.config.patternBrush.type)
+
+        label.text = """
+        🎨 Ink Drawing App (Enhanced)
+        📄 Layer: \(activeLayer.name)
+        🖌️ Brush: \(brushName)
+        ⚙️ Stabilization: \(Int(brushEngine.config.stabilization))
+        👆 Tap to draw
+        """
+        #endif
+    }
+
+    private func addBrushSelector() {
+        let buttonHeight: CGFloat = 44
+        let spacing: CGFloat = 8
+        let brushTypes: [PatternBrush.PatternType] = [
+            .parallelLines, .crossHatch, .dots, .contourLines, .waves
+        ]
+
+        brushButtons.removeAll()
+
+        for (index, brushType) in brushTypes.enumerated() {
+            let button = UIButton(type: .system)
+            button.frame = CGRect(
+                x: 20,
+                y: 180 + CGFloat(index) * (buttonHeight + spacing),
+                width: 150,
+                height: buttonHeight
+            )
+            button.setTitle(buttonName(for: brushType), for: .normal)
+            button.layer.cornerRadius = 8
+            button.tag = index
+
+            // Set initial state
+            if index == selectedBrushIndex {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.setTitleColor(.white, for: .normal)
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+            }
+
+            button.addTarget(self, action: #selector(brushButtonTapped(_:)), for: .touchUpInside)
+
+            brushButtons.append(button)
+            view.addSubview(button)
+        }
+    }
+
+    @objc private func brushButtonTapped(_ sender: UIButton) {
+        let brushTypes: [PatternBrush.PatternType] = [
+            .parallelLines, .crossHatch, .dots, .contourLines, .waves
+        ]
+
+        if sender.tag < brushTypes.count {
+            selectedBrushIndex = sender.tag
+            changeBrush(type: brushTypes[sender.tag])
+            updateBrushButtonsUI()
+            updateDebugInfo()
+        }
+    }
+
+    private func updateBrushButtonsUI() {
+        for (index, button) in brushButtons.enumerated() {
+            UIView.animate(withDuration: DesignTokens.Animation.durationFast) {
+                if index == self.selectedBrushIndex {
+                    // Selected state
+                    button.backgroundColor = DesignTokens.Colors.inkPrimary
+                    button.setTitleColor(.white, for: .normal)
+                    button.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+                } else {
+                    // Normal state
+                    button.backgroundColor = DesignTokens.Colors.surface
+                    button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+                    button.transform = .identity
+                }
+            }
+        }
+    }
+
+    private func buttonName(for brushType: PatternBrush.PatternType) -> String {
+        switch brushType {
+        case .parallelLines: return "∥ Lines"
+        case .crossHatch: return "✖️ Cross-Hatch"
+        case .dots: return "· Dots"
+        case .contourLines: return "◯ Contour"
+        case .waves: return "〜 Waves"
+        }
+    }
+
+    // MARK: - Undo/Redo
+
+    private func addUndoRedoButtons() {
+        let buttonWidth: CGFloat = 80
+        let buttonHeight: CGFloat = 44
+        let spacing: CGFloat = 10
+
+        // Undo button
+        let undoButton = UIButton(type: .system)
+        undoButton.frame = CGRect(
+            x: view.bounds.width - (buttonWidth * 2 + spacing + 20),
+            y: 50,
+            width: buttonWidth,
+            height: buttonHeight
+        )
+        undoButton.setTitle("⏮️ Undo", for: .normal)
+        undoButton.backgroundColor = DesignTokens.Colors.surface
+        undoButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        undoButton.layer.cornerRadius = 8
+        undoButton.addTarget(self, action: #selector(undoButtonTapped), for: .touchUpInside)
+        view.addSubview(undoButton)
+
+        // Redo button
+        let redoButton = UIButton(type: .system)
+        redoButton.frame = CGRect(
+            x: view.bounds.width - (buttonWidth + 20),
+            y: 50,
+            width: buttonWidth,
+            height: buttonHeight
+        )
+        redoButton.setTitle("Redo ⏭️", for: .normal)
+        redoButton.backgroundColor = DesignTokens.Colors.surface
+        redoButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        redoButton.layer.cornerRadius = 8
+        redoButton.addTarget(self, action: #selector(redoButtonTapped), for: .touchUpInside)
+        view.addSubview(redoButton)
+    }
+
+    // MARK: - Eraser Toggle
+
+    // MARK: - Tool Selector UI
+
+    private func addToolSelector() {
+        // Create horizontal toolbar for tools
+        let toolbarHeight: CGFloat = 60
+        let toolbarY = view.bounds.height - 150
+        let buttonSize: CGFloat = 50
+        let spacing: CGFloat = 10
+        let tools: [DrawingTool] = [.pattern, .brush, .marker, .fillBucket, .eraser]
+
+        let toolbarWidth = CGFloat(tools.count) * (buttonSize + spacing) - spacing
+        let toolbarX = (view.bounds.width - toolbarWidth) / 2
+
+        // Create container view for tool buttons
+        let toolbarContainer = UIView(frame: CGRect(
+            x: toolbarX,
+            y: toolbarY,
+            width: toolbarWidth,
+            height: toolbarHeight
+        ))
+        toolbarContainer.tag = 998 // Tag for later reference
+        view.addSubview(toolbarContainer)
+
+        // Create button for each tool
+        for (index, tool) in tools.enumerated() {
+            let button = UIButton(type: .system)
+            button.frame = CGRect(
+                x: CGFloat(index) * (buttonSize + spacing),
+                y: 0,
+                width: buttonSize,
+                height: buttonSize
+            )
+
+            // Style button
+            button.setTitle(tool.icon, for: .normal)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 24)
+            button.backgroundColor = DesignTokens.Colors.surface
+            button.layer.cornerRadius = 25
+            button.layer.shadowColor = UIColor.black.cgColor
+            button.layer.shadowOpacity = 0.2
+            button.layer.shadowOffset = CGSize(width: 0, height: 2)
+            button.layer.shadowRadius = 4
+
+            // Highlight current tool
+            if tool == brushEngine.config.currentTool {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.tintColor = .white
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.tintColor = DesignTokens.Colors.inkPrimary
+            }
+
+            // Set tag to identify tool
+            button.tag = 1000 + index
+            button.accessibilityLabel = tool.displayName
+
+            // Add action
+            button.addTarget(self, action: #selector(toolButtonTapped), for: .touchUpInside)
+
+            toolbarContainer.addSubview(button)
+        }
+    }
+
+    @objc private func toolButtonTapped(_ sender: UIButton) {
+        let toolIndex = sender.tag - 1000
+        let tools: [DrawingTool] = [.pattern, .brush, .marker, .fillBucket, .eraser]
+
+        guard toolIndex >= 0 && toolIndex < tools.count else { return }
+
+        let selectedTool = tools[toolIndex]
+
+        // Update brush engine configuration
+        brushEngine.config.currentTool = selectedTool
+
+        // Update eraser mode if eraser tool selected
+        brushEngine.config.isEraserMode = (selectedTool == .eraser)
+
+        // Update button appearances
+        if let toolbar = view.viewWithTag(998) {
+            for (index, _) in tools.enumerated() {
+                if let button = toolbar.viewWithTag(1000 + index) as? UIButton {
+                    if index == toolIndex {
+                        button.backgroundColor = DesignTokens.Colors.inkPrimary
+                        button.tintColor = .white
+                    } else {
+                        button.backgroundColor = DesignTokens.Colors.surface
+                        button.tintColor = DesignTokens.Colors.inkPrimary
+                    }
+                }
+            }
+        }
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        print("🎨 Switched to \(selectedTool.displayName) tool")
+    }
+
+    @objc private func undoButtonTapped() {
+        guard undoManager.canUndo() else {
+            showAlert("Nothing to undo", title: "Info")
+            return
+        }
+
+        // For now, just show message
+        // TODO: Implement actual undo rendering
+        _ = undoManager.undo()
+        showAlert("Undo not yet fully implemented\nWill clear layer for now", title: "Undo")
+        clearCurrentLayer()
+
+        print("⏮️ Undo (\(undoManager.undoCount()) remaining)")
+    }
+
+    @objc private func redoButtonTapped() {
+        guard undoManager.canRedo() else {
+            showAlert("Nothing to redo", title: "Info")
+            return
+        }
+
+        _ = undoManager.redo()
+        print("⏭️ Redo (\(undoManager.redoCount()) remaining)")
+    }
+
+    private func addCompleteButton() {
+        completeButton = UIButton(type: .system)
+        completeButton.setTitle("✓ Complete", for: .normal)
+        completeButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 16, weight: .semibold)
+        completeButton.setTitleColor(.white, for: .normal)
+        completeButton.backgroundColor = DesignTokens.Colors.inkPrimary
+        completeButton.layer.cornerRadius = 22
+        completeButton.layer.shadowColor = UIColor.black.cgColor
+        completeButton.layer.shadowOpacity = 0.2
+        completeButton.layer.shadowOffset = CGSize(width: 0, height: 8)
+        completeButton.layer.shadowRadius = 16
+        completeButton.addTarget(self, action: #selector(completeButtonTapped), for: .touchUpInside)
+        view.addSubview(completeButton)
+
+        completeButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            completeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            completeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            completeButton.widthAnchor.constraint(equalToConstant: 120),
+            completeButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
+    private func addBackButton() {
+        libraryButton = UIButton(type: .system)
+        libraryButton.setTitle("← Gallery", for: .normal)
+        libraryButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 16, weight: .semibold)
+        libraryButton.backgroundColor = DesignTokens.Colors.surface
+        libraryButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        libraryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        libraryButton.layer.cornerRadius = 22
+        libraryButton.layer.shadowColor = UIColor.black.cgColor
+        libraryButton.layer.shadowOpacity = 0.2
+        libraryButton.layer.shadowOffset = CGSize(width: 0, height: 8)
+        libraryButton.layer.shadowRadius = 16
+        libraryButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+        view.addSubview(libraryButton)
+
+        libraryButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            libraryButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            libraryButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            libraryButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 100),
+            libraryButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
+    @objc private func backButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.libraryButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.libraryButton.transform = .identity
+            }
+        }
+
+        // Go back to gallery
+        navigationController?.popViewController(animated: true)
+    }
+
+    private func addProgressLabel() {
+        progressLabel = UILabel()
+        progressLabel?.font = DesignTokens.Typography.systemFont(size: 14, weight: .medium)
+        progressLabel?.textColor = UIColor.white.withAlphaComponent(0.9)
+        progressLabel?.textAlignment = .center
+        progressLabel?.backgroundColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.85)
+        progressLabel?.layer.cornerRadius = 18
+        progressLabel?.clipsToBounds = true
+        progressLabel?.alpha = 0  // Will fade in after template loads
+
+        if let label = progressLabel {
+            view.addSubview(label)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
+                label.heightAnchor.constraint(equalToConstant: 36),
+                label.widthAnchor.constraint(greaterThanOrEqualToConstant: 150)
+            ])
+        }
+
+        updateProgressLabel()
+    }
+
+    private func updateProgressLabel() {
+        guard let label = progressLabel else { return }
+
+        if let progress = artworkProgress, let template = currentTemplate {
+            let layerName = layerManager.activeLayer?.name ?? "Unknown"
+            let completed = progress.completedLayerCount()
+            let total = template.layerDefinitions.count
+
+            label.text = "  \(layerName) • \(completed)/\(total) layers  "
+
+            // Show label
+            if label.alpha == 0 {
+                UIView.animate(withDuration: 0.3) {
+                    label.alpha = 1
+                }
+            }
+        } else {
+            label.text = "  Draw to begin  "
+        }
+    }
+
+    @objc private func completeButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.impactOccurred()
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.completeButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.completeButton.transform = .identity
+            }
+        }
+
+        // Export artwork and show completion screen
+        showCompletionScreen()
+    }
+
+    // MARK: - Error Handling
+
+    private func showAlert(_ message: String, title: String = "Notice") {
+        let alert = UIAlertController(
+            title: title,
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    // MARK: - Template Loading
+
+    func loadTemplate(_ template: Template) {
+        currentTemplate = template
+        artworkStartTime = Date()
+        print("📋 Loaded template: '\(template.name)'")
+    }
+
+    // MARK: - Completion & Export
+
+    private func showCompletionScreen() {
+        // Export current artwork
+        guard let completedImage = exportArtwork() else {
+            showAlert("Failed to export artwork", title: "Error")
+            return
+        }
+
+        // Calculate completion time
+        let completionTime: TimeInterval
+        if let startTime = artworkStartTime {
+            completionTime = Date().timeIntervalSince(startTime)
+        } else {
+            completionTime = 0
+        }
+
+        // Get artwork name
+        let artworkName = currentTemplate?.name ?? "Untitled Artwork"
+
+        // Create and present completion screen
+        let completionVC = CompletionViewController(
+            completedImage: completedImage,
+            artworkName: artworkName,
+            completionTime: completionTime
+        )
+        completionVC.delegate = self
+
+        present(completionVC, animated: true) {
+            print("🎉 Showing completion screen")
+        }
+    }
+
+    private func exportArtwork() -> UIImage? {
+        // Get composited texture from renderer
+        guard let compositedTexture = renderer.compositeLayersForExport() else {
+            print("❌ Failed to composite layers for export")
+            return nil
+        }
+
+        // Convert Metal texture to UIImage
+        let image = textureToImage(texture: compositedTexture)
+        print("✅ Exported artwork: \(compositedTexture.width)×\(compositedTexture.height)")
+        return image
+    }
+
+    private func textureToImage(texture: MTLTexture) -> UIImage? {
+        // Get texture dimensions
+        let width = texture.width
+        let height = texture.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let bitsPerComponent = 8
+
+        // Allocate buffer for pixel data
+        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+        // Copy texture data to buffer
+        let region = MTLRegionMake2D(0, 0, width, height)
+        texture.getBytes(&pixelData, bytesPerRow: bytesPerRow, from: region, mipmapLevel: 0)
+
+        // Create CGImage from pixel data
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+
+        guard let dataProvider = CGDataProvider(data: Data(pixelData) as CFData),
+              let cgImage = CGImage(
+                  width: width,
+                  height: height,
+                  bitsPerComponent: bitsPerComponent,
+                  bitsPerPixel: bytesPerPixel * bitsPerComponent,
+                  bytesPerRow: bytesPerRow,
+                  space: colorSpace,
+                  bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
+                  provider: dataProvider,
+                  decode: nil,
+                  shouldInterpolate: false,
+                  intent: .defaultIntent
+              ) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage)
+    }
+
+    // MARK: - Layer Selector
+
+    private func addLayerSelector() {
+        layerSelectorView = LayerSelectorView()
+        layerSelectorView.delegate = self
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        view.addSubview(layerSelectorView)
+
+        layerSelectorView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            layerSelectorView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            layerSelectorView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            layerSelectorView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -90),
+            layerSelectorView.heightAnchor.constraint(equalToConstant: 96)
+        ])
+    }
+
+    private func addBrushPalette() {
+        // Create brush palette container
+        brushPaletteView = UIView()
+        brushPaletteView.backgroundColor = UIColor.white.withAlphaComponent(0.95)
+        brushPaletteView.layer.cornerRadius = 20
+        brushPaletteView.layer.masksToBounds = false
+
+        // Add blur effect
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
+        let blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = brushPaletteView.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.layer.cornerRadius = 20
+        blurView.clipsToBounds = true
+        brushPaletteView.insertSubview(blurView, at: 0)
+
+        // Shadow
+        brushPaletteView.layer.shadowColor = UIColor.black.cgColor
+        brushPaletteView.layer.shadowOpacity = 0.15
+        brushPaletteView.layer.shadowOffset = CGSize(width: 0, height: 12)
+        brushPaletteView.layer.shadowRadius = 20
+
+        view.addSubview(brushPaletteView)
+
+        brushPaletteView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            brushPaletteView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            brushPaletteView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            brushPaletteView.heightAnchor.constraint(equalToConstant: 64),
+            brushPaletteView.widthAnchor.constraint(equalToConstant: 340)
+        ])
+
+        // Create brush buttons in palette
+        let brushTypes: [PatternBrush.PatternType] = [
+            .parallelLines, .crossHatch, .dots, .contourLines, .waves
+        ]
+
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.distribution = .fillEqually
+        stackView.spacing = 8
+
+        brushPaletteView.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: brushPaletteView.topAnchor, constant: 10),
+            stackView.leadingAnchor.constraint(equalTo: brushPaletteView.leadingAnchor, constant: 12),
+            stackView.trailingAnchor.constraint(equalTo: brushPaletteView.trailingAnchor, constant: -12),
+            stackView.bottomAnchor.constraint(equalTo: brushPaletteView.bottomAnchor, constant: -10)
+        ])
+
+        brushButtons.removeAll()
+
+        for (index, brushType) in brushTypes.enumerated() {
+            let button = UIButton(type: .system)
+            button.setTitle(brushIcon(for: brushType), for: .normal)
+            button.titleLabel?.font = DesignTokens.Typography.systemFont(size: 20, weight: .semibold)
+            button.layer.cornerRadius = 22
+            button.tag = index
+
+            // Long press for settings
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(brushButtonLongPressed(_:)))
+            button.addGestureRecognizer(longPress)
+
+            // Set initial state
+            updateBrushButton(button, index: index, isSelected: index == selectedBrushIndex)
+
+            button.addTarget(self, action: #selector(brushButtonTapped(_:)), for: .touchUpInside)
+            brushButtons.append(button)
+            stackView.addArrangedSubview(button)
+        }
+
+        // Add Pro Mode settings button
+        advancedSettingsButton = UIButton(type: .system)
+        advancedSettingsButton.setTitle("···", for: .normal)  // Three dots for Pro Mode
+        advancedSettingsButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 28, weight: .bold)
+        advancedSettingsButton.backgroundColor = DesignTokens.Colors.surface
+        advancedSettingsButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+        advancedSettingsButton.layer.cornerRadius = 26
+        advancedSettingsButton.layer.masksToBounds = false
+
+        // Add blur effect
+        let settingsBlur = UIBlurEffect(style: .systemUltraThinMaterialLight)
+        let settingsBlurView = UIVisualEffectView(effect: settingsBlur)
+        settingsBlurView.frame = advancedSettingsButton.bounds
+        settingsBlurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        settingsBlurView.layer.cornerRadius = 26
+        settingsBlurView.clipsToBounds = true
+        settingsBlurView.isUserInteractionEnabled = false
+        advancedSettingsButton.insertSubview(settingsBlurView, at: 0)
+
+        // Shadow
+        advancedSettingsButton.layer.shadowColor = UIColor.black.cgColor
+        advancedSettingsButton.layer.shadowOpacity = 0.15
+        advancedSettingsButton.layer.shadowOffset = CGSize(width: 0, height: 12)
+        advancedSettingsButton.layer.shadowRadius = 20
+
+        advancedSettingsButton.addTarget(self, action: #selector(advancedSettingsButtonTapped), for: .touchUpInside)
+        view.addSubview(advancedSettingsButton)
+
+        advancedSettingsButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            advancedSettingsButton.centerYAnchor.constraint(equalTo: brushPaletteView.centerYAnchor),
+            advancedSettingsButton.leadingAnchor.constraint(equalTo: brushPaletteView.trailingAnchor, constant: 12),
+            advancedSettingsButton.widthAnchor.constraint(equalToConstant: 52),
+            advancedSettingsButton.heightAnchor.constraint(equalToConstant: 52)
+        ])
+    }
+
+    private func updateBrushButton(_ button: UIButton, index: Int, isSelected: Bool) {
+        UIView.animate(withDuration: DesignTokens.Animation.durationFast) {
+            if isSelected {
+                button.backgroundColor = DesignTokens.Colors.inkPrimary
+                button.setTitleColor(.white, for: .normal)
+                button.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+            } else {
+                button.backgroundColor = DesignTokens.Colors.surface
+                button.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
+                button.transform = .identity
+            }
+        }
+    }
+
+    private func brushIcon(for type: PatternBrush.PatternType) -> String {
+        switch type {
+        case .parallelLines: return "≡"
+        case .crossHatch: return "⊞"
+        case .dots: return "⊙"
+        case .contourLines: return "◎"
+        case .waves: return "≈"
+        }
+    }
+
+    @objc private func brushButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began,
+              let button = gesture.view as? UIButton else { return }
+
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show brush settings panel
+        let panel = BrushSettingsPanel(brush: brushEngine.config.patternBrush)
+        panel.delegate = self
+        panel.present(in: view)
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            button.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                button.transform = self.selectedBrushIndex == button.tag ?
+                    CGAffineTransform(scaleX: 1.05, y: 1.05) : .identity
+            }
+        }
+    }
+
+    @objc private func advancedSettingsButtonTapped() {
+        // Haptic feedback
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        // Show advanced brush settings panel
+        let panel = AdvancedBrushSettingsPanel(configuration: brushEngine.config)
+        panel.delegate = self
+        panel.present(in: view)
+
+        // Animate button
+        UIView.animate(withDuration: 0.1) {
+            self.advancedSettingsButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.advancedSettingsButton.transform = .identity
+            }
+        }
+
+        print("⚙️ Opening advanced brush settings")
+    }
+
+    // MARK: - Auto-Hide Behavior
+
+    private func scheduleAutoHide() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = Timer.scheduledTimer(
+            withTimeInterval: 3.0,
+            repeats: false
+        ) { [weak self] _ in
+            self?.hideUI()
+        }
+    }
+
+    private func hideUI() {
+        guard isUIVisible else { return }
+
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+            // In Simple Mode, layer selector stays hidden
+            if !self.isSimpleMode {
+                self.layerSelectorView?.alpha = 0
+            }
+            self.brushPaletteView?.alpha = 0
+            self.advancedSettingsButton?.alpha = 0
+            self.completeButton?.alpha = 0
+            self.libraryButton?.alpha = 0
+            self.progressLabel?.alpha = 0
+        }
+
+        isUIVisible = false
+    }
+
+    private func showUI() {
+        guard !isUIVisible else {
+            // If already visible, just reschedule
+            scheduleAutoHide()
+            return
+        }
+
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+            // In Simple Mode, layer selector stays hidden
+            if !self.isSimpleMode {
+                self.layerSelectorView?.alpha = 1
+            }
+            self.brushPaletteView?.alpha = 1
+            self.advancedSettingsButton?.alpha = 1
+            self.completeButton?.alpha = 1
+            self.libraryButton?.alpha = 1
+            if self.artworkProgress != nil {
+                self.progressLabel?.alpha = 1
+            }
+        }
+
+        isUIVisible = true
+        scheduleAutoHide()
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // Show UI on touch
+        if !isUIVisible {
+            showUI()
+        } else {
+            // Reschedule hide if UI is visible
+            scheduleAutoHide()
+        }
+
+        // Continue with existing touch handling...
+        // (rest of touchesBegan implementation stays the same)
+        guard touches.count == 1,
+              let touch = touches.first,
+              let activeLayer = layerManager.activeLayer else {
+            return
+        }
+
+        if activeLayer.isLocked {
+            showAlert("Layer '\(activeLayer.name)' is locked.\nUnlock it to draw.", title: "Layer Locked")
+            print("⚠️ Layer '\(activeLayer.name)' is locked!")
+            return
+        }
+
+        let point = touch.location(in: metalView)
+        let canvasPoint = viewToCanvasPoint(point)
+
+        // Handle fill bucket tool (tap-based)
+        if brushEngine.config.currentTool == .fillBucket {
+            handleFillBucketTap(at: canvasPoint, layerId: activeLayer.id)
+            return
+        }
+
+        // For other tools (brush, marker, pattern, eraser) - normal stroke handling
+        let pressure = touch.force > 0 ? Float(touch.force / touch.maximumPossibleForce) : 1.0
+
+        // Read Apple Pencil tilt and azimuth (if available)
+        let tiltAngle = Float(touch.altitudeAngle * 180.0 / .pi) // Convert radians to degrees (0-90°)
+        let azimuthAngle = Float(touch.azimuthAngle(in: metalView) * 180.0 / .pi) // Convert radians to degrees (0-360°)
+
+        brushEngine.beginStroke(
+            at: canvasPoint,
+            pressure: pressure,
+            layerId: activeLayer.id,
+            tiltAngle: tiltAngle,
+            azimuthAngle: azimuthAngle
+        )
+        isDrawing = true
+
+        print("✏️ Drawing started on layer '\(activeLayer.name)' at \(canvasPoint) with \(brushEngine.config.currentTool.displayName) tool")
+    }
+
+    // MARK: - Tool-Specific Rendering
+
+    /// Draw brush stamps using SolidBrushRenderer
+    private func drawBrushStamps(_ stamps: [BrushStamp]) {
+        guard let solidBrushRenderer = solidBrushRenderer,
+              let activeLayer = layerManager.activeLayer,
+              let layerTexture = renderer.getLayerTexture(for: activeLayer.id),
+              let commandBuffer = renderer.commandQueue.makeCommandBuffer() else {
+            print("❌ Failed to get resources for brush rendering")
+            return
+        }
+
+        // Render each stamp
+        for stamp in stamps {
+            solidBrushRenderer.renderBrushStamp(
+                position: stamp.position,
+                size: stamp.size,
+                hardness: stamp.hardness,
+                color: stamp.color,
+                opacity: stamp.opacity,
+                to: layerTexture,
+                canvasSize: canvasSize,
+                commandBuffer: commandBuffer,
+                isEraser: stamp.isEraser
+            )
+        }
+
+        // Commit the command buffer
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        // Trigger redraw
+        metalView.setNeedsDisplay()
+    }
+
+    /// Handle fill bucket tool tap
+    private func handleFillBucketTap(at point: CGPoint, layerId: UUID) {
+        guard let floodFillEngine = floodFillEngine,
+              let layerTexture = renderer.getLayerTexture(for: layerId) else {
+            print("❌ Failed to get resources for fill bucket")
+            showAlert("Fill bucket not available", title: "Error")
+            return
+        }
+
+        let config = brushEngine.config.fillBucketConfig
+
+        print("🪣 Fill bucket at \(point) with tolerance \(config.tolerance)")
+
+        // Perform flood fill
+        if let filledTexture = floodFillEngine.floodFill(
+            texture: layerTexture,
+            at: point,
+            fillColor: config.color,
+            tolerance: config.tolerance,
+            contiguous: config.contiguous
+        ) {
+            // Replace layer texture with filled texture
+            renderer.replaceLayerTexture(layerId: layerId, with: filledTexture)
+
+            // Trigger redraw
+            metalView.setNeedsDisplay()
+
+            print("✅ Fill bucket complete")
+        } else {
+            print("ℹ️ Fill bucket had no effect")
+        }
+    }
+}
+
+// MARK: - LayerSelectorDelegate
+
+extension EnhancedCanvasViewController: LayerSelectorDelegate {
+    func layerSelector(_ selector: LayerSelectorView, didSelectLayer layer: Layer) {
+        // Find layer index
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.selectLayer(at: index)
+            updateDebugInfo()
+            print("📄 Selected layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didToggleVisibilityFor layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.toggleLayerVisibility(at: index)
+
+            // Update layer selector
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            print("👁️ Toggled visibility for layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelectorDidRequestAddLayer(_ selector: LayerSelectorView) {
+        // Create new layer
+        let newLayerNumber = layerManager.layers.count + 1
+        let newLayer = Layer(name: "Layer \(newLayerNumber)", opacity: 1.0)
+
+        layerManager.addLayer(newLayer)
+
+        // Refresh layer selector
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        print("➕ Added new layer: '\(newLayer.name)'")
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestDeleteLayer layer: Layer) {
+        guard layerManager.layers.count > 1 else {
+            showAlert("Cannot delete the last layer", title: "Error")
+            return
+        }
+
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.removeLayer(at: index)
+
+            // Refresh layer selector
+            layerSelectorView.configure(
+                with: layerManager.layers,
+                selectedLayerId: layerManager.activeLayer?.id
+            )
+
+            print("🗑️ Deleted layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestRenameLayer layer: Layer) {
+        let alert = UIAlertController(
+            title: "Rename Layer",
+            message: nil,
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { textField in
+            textField.text = layer.name
+            textField.placeholder = "Layer name"
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+            guard let self = self,
+                  let newName = alert.textFields?.first?.text,
+                  !newName.isEmpty else {
+                return
+            }
+
+            if let index = self.layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+                self.layerManager.renameLayer(at: index, to: newName)
+
+                // Update layer selector
+                if let updatedLayer = self.layerManager.layers.first(where: { $0.id == layer.id }) {
+                    self.layerSelectorView.updateLayer(updatedLayer)
+                }
+
+                self.updateDebugInfo()
+                print("✏️ Renamed layer to: '\(newName)'")
+            }
+        })
+
+        present(alert, animated: true)
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didRequestToggleLockFor layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.toggleLayerLock(at: index)
+
+            // Update layer selector
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            let status = layer.isLocked ? "unlocked" : "locked"
+            print("🔒 \(status.capitalized) layer: '\(layer.name)'")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didChangeBlendMode blendMode: Layer.BlendMode, for layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.setLayerBlendMode(blendMode, at: index)
+
+            // Update layer selector to show new blend mode
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            print("🎨 Changed blend mode for '\(layer.name)' to: \(blendMode.displayName)")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didChangeOpacity opacity: Float, for layer: Layer) {
+        if let index = layerManager.layers.firstIndex(where: { $0.id == layer.id }) {
+            layerManager.setLayerOpacity(opacity, at: index)
+
+            // Update layer selector to show new opacity
+            if let updatedLayer = layerManager.layers.first(where: { $0.id == layer.id }) {
+                layerSelectorView.updateLayer(updatedLayer)
+            }
+
+            let opacityPercent = Int(opacity * 100)
+            print("💧 Changed opacity for '\(layer.name)' to: \(opacityPercent)%")
+        }
+    }
+
+    func layerSelector(_ selector: LayerSelectorView, didReorderLayer layer: Layer, fromIndex: Int, toIndex: Int) {
+        // Reorder in layer manager
+        layerManager.moveLayer(from: fromIndex, to: toIndex)
+
+        // Refresh layer selector to update display
+        layerSelectorView.configure(
+            with: layerManager.layers,
+            selectedLayerId: layerManager.activeLayer?.id
+        )
+
+        // Trigger compositing refresh (layers reordered)
+        renderer.compositeLayersForDisplay()
+
+        print("🔄 Reordered layer '\(layer.name)' from index \(fromIndex) to \(toIndex)")
+    }
+}
+
+// MARK: - BrushSettingsPanelDelegate
+
+extension EnhancedCanvasViewController: BrushSettingsPanelDelegate {
+    func brushSettingsPanel(_ panel: BrushSettingsPanel, didUpdateBrush brush: PatternBrush) {
+        // Update brush engine pattern brush
+        brushEngine.config.patternBrush = brush
+        updateDebugInfo()
+
+        print("🖌️ Updated brush settings:")
+        print("  - Rotation: \(brush.rotation)°")
+        print("  - Spacing: \(brush.spacing)px")
+        print("  - Opacity: \(Int(brush.opacity * 100))%")
+        print("  - Scale: \(brush.scale)×")
+    }
+
+    func brushSettingsPanelDidCancel(_ panel: BrushSettingsPanel) {
+        print("❌ Brush settings cancelled")
+    }
+}
+
+// MARK: - AdvancedBrushSettingsPanelDelegate
+
+extension EnhancedCanvasViewController: AdvancedBrushSettingsPanelDelegate {
+    func advancedBrushSettingsPanel(_ panel: AdvancedBrushSettingsPanel, didUpdateConfiguration config: BrushConfiguration) {
+        // Update entire brush engine configuration
+        brushEngine.config = config
+        updateDebugInfo()
+
+        print("🔧 Updated advanced brush configuration:")
+        print("  - Stabilization: \(Int(config.stabilization))")
+        print("  - Prediction: \(Int(config.prediction))")
+        print("  - Pressure Curve: \(config.pressureCurve.curveType)")
+        print("  - Velocity Dynamics: \(config.velocityDynamics.enabled ? "Enabled" : "Disabled")")
+        print("  - Jitter: \(config.jitter.enabled ? "Enabled" : "Disabled")")
+        print("  - Flow: \(Int(config.flow * 100))%")
+    }
+
+    func advancedBrushSettingsPanelDidCancel(_ panel: AdvancedBrushSettingsPanel) {
+        print("❌ Advanced brush settings cancelled")
+    }
+}
+
+// MARK: - CompletionViewControllerDelegate
+
+extension EnhancedCanvasViewController: CompletionViewControllerDelegate {
+    func completionViewControllerDidSelectNextArtwork(_ controller: CompletionViewController) {
+        print("→ User wants next artwork, navigating back to gallery")
+        // Navigate back to template gallery
+        navigationController?.popViewController(animated: true)
+    }
+
+    func completionViewControllerDidRequestShare(_ controller: CompletionViewController, image: UIImage) {
+        print("📤 User shared artwork")
+        // Analytics tracking could go here
+    }
+}
+
+// MARK: - BrushLibraryViewDelegate
+
+extension EnhancedCanvasViewController: BrushLibraryViewDelegate {
+    func brushLibrary(_ library: BrushLibraryView, didSelectPreset preset: BrushPreset) {
+        // Apply preset to brush engine
+        brushEngine.config = preset.configuration
+
+        // Update debug info
+        updateDebugInfo()
+
+        // Dismiss library
+        library.dismiss()
+
+        print("🖌️ Applied preset: '\(preset.name)'")
+    }
+
+    func brushLibraryDidRequestSavePreset(_ library: BrushLibraryView, currentConfiguration: BrushConfiguration) {
+        // Show save dialog
+        let alert = UIAlertController(
+            title: "Save Brush Preset",
+            message: "Enter a name for this preset",
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { textField in
+            textField.placeholder = "Preset name"
+            textField.autocapitalizationType = .words
+        }
+
+        alert.addTextField { textField in
+            textField.placeholder = "Icon (emoji)"
+            textField.text = "🖌️"
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self, weak library] _ in
+            guard let name = alert.textFields?[0].text, !name.isEmpty,
+                  let icon = alert.textFields?[1].text, !icon.isEmpty else {
+                return
+            }
+
+            // Save preset
+            BrushPresetsLibrary.shared.saveCustomPreset(
+                name: name,
+                icon: icon,
+                configuration: currentConfiguration
+            )
+
+            // Refresh library
+            library?.configure(with: currentConfiguration)
+
+            // Show confirmation
+            self?.showAlert("Preset '\(name)' saved successfully!", title: "Saved")
+
+            print("💾 Saved custom preset: '\(name)'")
+        })
+
+        present(alert, animated: true)
+    }
+
+    func brushLibraryDidCancel(_ library: BrushLibraryView) {
+        library.dismiss()
+        print("❌ Brush library closed")
+    }
+}
