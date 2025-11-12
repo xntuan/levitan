@@ -333,7 +333,16 @@ class TemplateGalleryViewController: UIViewController {
             size: 15,
             weight: DesignTokens.Typography.semibold
         )
-        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 20, bottom: 10, right: 20)
+
+        // Use modern UIButton.Configuration for iOS 15+
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.plain()
+            config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20)
+            button.configuration = config
+        } else {
+            button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 20, bottom: 10, right: 20)
+        }
+
         button.layer.cornerRadius = 22
         button.tag = category?.hashValue ?? -1
 

@@ -643,7 +643,16 @@ class EnhancedCanvasViewController: UIViewController {
         libraryButton.titleLabel?.font = DesignTokens.Typography.systemFont(size: 16, weight: .semibold)
         libraryButton.backgroundColor = DesignTokens.Colors.surface
         libraryButton.setTitleColor(DesignTokens.Colors.inkPrimary, for: .normal)
-        libraryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+
+        // Use modern UIButton.Configuration for iOS 15+
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.plain()
+            config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+            libraryButton.configuration = config
+        } else {
+            libraryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        }
+
         libraryButton.layer.cornerRadius = 22
         libraryButton.layer.shadowColor = UIColor.black.cgColor
         libraryButton.layer.shadowOpacity = 0.2

@@ -257,8 +257,4 @@ class MaskGenerator {
 
 // MARK: - UIImage PNG Extension
 
-extension UIImage {
-    func pngData() -> Data? {
-        return self.pngData()
-    }
-}
+// UIImage.pngData() is already available in UIKit, no extension needed
