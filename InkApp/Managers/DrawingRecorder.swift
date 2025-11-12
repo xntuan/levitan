@@ -388,7 +388,7 @@ class DrawingRecorder {
     }
 
     private func estimateFileSize() -> Int64 {
-        let pixelCount = resolution.width * resolution.height
+        _ = resolution.width * resolution.height  // pixelCount - for future bitrate calculation
         let duration = (frames.last?.timestamp ?? 0) / Double(speedMultiplier)
         let bitrate: Int64
 

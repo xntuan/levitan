@@ -130,7 +130,7 @@ class ChallengeManager {
 
     /// Update participation progress
     func updateProgress(challengeID: UUID, userID: String, worksCompleted: Int) {
-        guard var challenge = challenges[challengeID],
+        guard let challenge = challenges[challengeID],
               var challengeParticipations = participations[challengeID],
               let index = challengeParticipations.firstIndex(where: { $0.userID == userID }) else {
             print("❌ Cannot update progress: challenge or participation not found")

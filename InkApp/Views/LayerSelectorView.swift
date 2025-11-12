@@ -253,7 +253,7 @@ extension LayerSelectorView: LayerCardDelegate {
 
         // Lock/Unlock
         let lockTitle = layer.isLocked ? "Unlock Layer" : "Lock Layer"
-        let lockIcon = layer.isLocked ? "lock.open" : "lock"
+        _ = layer.isLocked ? "lock.open" : "lock"  // lockIcon - for future use
         alert.addAction(UIAlertAction(title: lockTitle, style: .default) { [weak self] _ in
             guard let self = self else { return }
             self.delegate?.layerSelector(self, didRequestToggleLockFor: layer)
@@ -290,7 +290,7 @@ extension LayerSelectorView: LayerCardDelegate {
         let alert = UIAlertController(title: "Layer Opacity", message: nil, preferredStyle: .alert)
 
         // Add slider
-        let sliderHeight: CGFloat = 50
+        _ = 50 as CGFloat  // sliderHeight - for future layout constraints
         let slider = UISlider()
         slider.minimumValue = 0
         slider.maximumValue = 100

@@ -112,7 +112,7 @@ class TemplateMaskExporter {
                 continue
             }
 
-            if let url = saveImageToDocuments(baseImage, name: template.baseImageName) {
+            if saveImageToDocuments(baseImage, name: template.baseImageName) != nil {
                 print("  ✅ Saved base image: \(template.baseImageName).png")
             }
         }

@@ -1365,7 +1365,7 @@ extension EnhancedCanvasViewController: LayerSelectorDelegate {
         )
 
         // Trigger compositing refresh (layers reordered)
-        renderer.compositeLayersForDisplay()
+        _ = renderer.compositeLayersForDisplay()
 
         print("🔄 Reordered layer '\(layer.name)' from index \(fromIndex) to \(toIndex)")
     }

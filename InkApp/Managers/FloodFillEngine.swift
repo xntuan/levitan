@@ -109,7 +109,7 @@ class FloodFillEngine {
             // Skip if out of bounds
             guard x >= 0 && x < width && y >= 0 && y < height else { continue }
 
-            let index = (y * width + x) * 4
+            _ = (y * width + x) * 4  // index - for future RGBA pixel access
             let flatIndex = y * width + x
 
             // Skip if already visited

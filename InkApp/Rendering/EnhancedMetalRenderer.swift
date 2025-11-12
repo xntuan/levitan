@@ -468,7 +468,7 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
         var currentOutput = tempTexture2
 
         // Composite each visible layer
-        for (index, layer) in visibleLayers.enumerated() {
+        for (_, layer) in visibleLayers.enumerated() {
             guard let layerTexture = layerTextures[layer.id] else {
                 continue
             }

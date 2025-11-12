@@ -640,7 +640,7 @@ extension EnhancedCanvasViewController {
         renderer.clearAllLayers()
 
         // 2. Load base image (optional - can be used as background reference)
-        if let baseImage = template.loadBaseImage() {
+        if template.loadBaseImage() != nil {
             print("  ✅ Loaded base image: \(template.baseImageName)")
             // TODO: Optionally display as background guide layer
         }

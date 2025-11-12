@@ -131,7 +131,7 @@ class AchievementManager {
             }
             return (Float(uniqueTechniques) / Float(techniqueCount) * 0.5, false)
 
-        case .masterPrecision(let undoLimit, let workCount):
+        case .masterPrecision(_, let workCount):
             // This requires tracking per-work undo counts (future enhancement)
             // For now, estimate based on total works
             let estimated = progress.totalCompletedWorks
@@ -169,21 +169,21 @@ class AchievementManager {
             let progress = min(1.0, Float(current) / Float(minutes))
             return (progress, current >= minutes)
 
-        case .completeQuickWork(let minutes):
+        case .completeQuickWork(_):
             // Requires per-work time tracking (future enhancement)
             return (0.0, false)
 
-        case .completeLongWork(let minutes):
+        case .completeLongWork(_):
             // Requires per-work time tracking (future enhancement)
             return (0.0, false)
 
         // Streak-based (requires DailyContentManager)
-        case .dailyStreak(let days):
+        case .dailyStreak(_):
             // This should be checked with DailyContentManager
             // For now, return 0
             return (0.0, false)
 
-        case .totalActiveDays(let days):
+        case .totalActiveDays(_):
             // This should be checked with DailyContentManager
             return (0.0, false)
 

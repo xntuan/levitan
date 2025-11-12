@@ -396,7 +396,7 @@ class BrushPresetsLibrary {
             preset.createdAt = Date()
 
             // Check for duplicate names
-            var baseName = preset.name
+            let baseName = preset.name
             var counter = 1
             while customPresets.contains(where: { $0.name == preset.name }) {
                 preset.name = "\(baseName) (\(counter))"

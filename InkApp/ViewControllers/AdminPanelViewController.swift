@@ -312,7 +312,13 @@ class AdminPanelViewController: UIViewController {
         let button = UIButton(type: .system)
         button.backgroundColor = color.withAlphaComponent(0.1)
         button.layer.cornerRadius = 8
-        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.plain()
+            config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+            button.configuration = config
+        } else {
+            button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
+        }
         button.addTarget(self, action: action, for: .touchUpInside)
 
         let stack = UIStackView()

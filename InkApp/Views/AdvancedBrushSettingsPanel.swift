@@ -291,7 +291,13 @@ class AdvancedBrushSettingsPanel: UIView {
         editCurveButton.layer.cornerRadius = 8
         editCurveButton.layer.borderWidth = 1
         editCurveButton.layer.borderColor = DesignTokens.Colors.inkPrimary.withAlphaComponent(0.3).cgColor
-        editCurveButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.plain()
+            config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+            editCurveButton.configuration = config
+        } else {
+            editCurveButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        }
         editCurveButton.addTarget(self, action: #selector(editCurveButtonTapped), for: .touchUpInside)
         pressureSection.addArrangedSubview(editCurveButton)
 
