@@ -1,0 +1,22 @@
+name: PencilKitDemo
+
+options:
+  bundleIdPrefix: com.ink
+  deploymentTarget:
+    iOS: "14.0"
+
+targets:
+  PencilKitDemo:
+    type: application
+    platform: iOS
+    sources:
+      - PencilKitDemo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ink.PencilKitDemo
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "P23787K5H9"
+        INFOPLIST_FILE: PencilKitDemo/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "14.0"
