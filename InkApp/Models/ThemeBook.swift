@@ -57,7 +57,7 @@ struct ThemeBook: Codable, Identifiable {
 
     /// Get theme color
     func getThemeColor() -> UIColor {
-        return UIColor(hex: color)
+        return UIColor(hex: color)!
     }
 }
 
@@ -75,22 +75,22 @@ extension ThemeBook {
         // Categorize templates
         let natureTemplates = templates.filter { $0.category == .nature }
         let abstractTemplates = templates.filter { $0.category == .abstract }
-        let geometricTemplates = templates.filter { $0.category == .geometric }
+        let patternTemplates = templates.filter { $0.category == .patterns }
 
-        // Get easy templates for beginners (all Easy difficulty)
-        let beginnerTemplates = templates.filter { $0.difficulty == .easy }.prefix(3).map { $0.id }
+        // Get easy templates for beginners (all Beginner difficulty)
+        let beginnerTemplates = templates.filter { $0.difficulty == .beginner }.prefix(3).map { $0.id }
 
         // Nature theme book gets all nature templates
         let natureIds = natureTemplates.map { $0.id }
 
-        // Abstract theme book gets abstract + some geometric
-        let abstractIds = abstractTemplates.map { $0.id } + geometricTemplates.prefix(2).map { $0.id }
+        // Abstract theme book gets abstract + some patterns
+        let abstractIds = abstractTemplates.map { $0.id } + patternTemplates.prefix(2).map { $0.id }
 
         // Animal theme book - currently empty (waiting for animal category templates)
         let animalIds: [UUID] = []
 
-        // Zen theme book - advanced geometric patterns
-        let zenIds = geometricTemplates.filter { $0.difficulty == .challenging }.map { $0.id }
+        // Zen theme book - advanced pattern templates
+        let zenIds = patternTemplates.filter { $0.difficulty == .advanced }.map { $0.id }
 
         // Seasonal - some nature templates
         let seasonalIds = natureTemplates.suffix(2).map { $0.id }

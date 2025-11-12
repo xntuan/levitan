@@ -74,8 +74,8 @@ class CompletionViewController: UIViewController {
         let gradientLayer = CAGradientLayer()
         gradientLayer.frame = view.bounds
         gradientLayer.colors = [
-            UIColor(hex: "667eea").cgColor,
-            UIColor(hex: "764ba2").cgColor
+            UIColor(hex: "667eea")!.cgColor,
+            UIColor(hex: "764ba2")!.cgColor
         ]
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)
         gradientLayer.endPoint = CGPoint(x: 1, y: 1)

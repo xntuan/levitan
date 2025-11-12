@@ -113,7 +113,7 @@ class DailyContentManager {
         let templateIndex = daysSinceEpoch % max(suitableTemplates.count, 1)
         let template = suitableTemplates.isEmpty ? templatePool[0] : suitableTemplates[templateIndex]
 
-        let titles = [
+        let titles: [PatternTechnique: String] = [
             .stippling: "Master Stippling Depth",
             .hatching: "Perfect Parallel Lines",
             .crossHatching: "Cross-Hatch Mastery",
@@ -122,7 +122,7 @@ class DailyContentManager {
             .waves: "Organic Wave Patterns"
         ]
 
-        let descriptions = [
+        let descriptions: [PatternTechnique: String] = [
             .stippling: "Create smooth gradients using only stippling dots",
             .hatching: "Use parallel hatching to show depth and form",
             .crossHatching: "Layer multiple hatching angles for rich shadows",
@@ -313,11 +313,13 @@ class DailyContentManager {
         let placeholderTemplate = Template(
             id: UUID(),
             name: "Placeholder",
-            category: .geometric,
+            description: "Placeholder template",
+            category: .patterns,
             difficulty: .beginner,
-            thumbnailName: "",
-            svgPath: "",
-            estimatedTime: 10,
+            estimatedMinutes: 10,
+            thumbnailImageName: "",
+            baseImageName: "",
+            layerDefinitions: [],
             primaryTechnique: .stippling
         )
 
@@ -326,7 +328,7 @@ class DailyContentManager {
             freeTemplate: placeholderTemplate,
             challenge: nil,
             tipOfTheDay: "No tips available today",
-            streakBonus: StreakBonus(currentStreak: 0, bonus: 0, extraTemplates: [])
+            streakBonus: 0
         )
     }
 

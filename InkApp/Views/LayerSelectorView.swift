@@ -564,7 +564,7 @@ class LayerCardView: UIView {
     // MARK: - Properties
 
     weak var delegate: LayerCardDelegate?
-    private var layer: Layer?
+    private var layerData: Layer?
 
     // UI Elements
     private let thumbnailView: UIImageView = {
@@ -690,7 +690,7 @@ class LayerCardView: UIView {
     // MARK: - Configuration
 
     func configure(with layer: Layer, isSelected: Bool) {
-        self.layer = layer
+        self.layerData = layer
 
         nameLabel.text = layer.name
 
@@ -710,8 +710,8 @@ class LayerCardView: UIView {
         if isSelected {
             thumbnailView.layer.borderWidth = 2
             thumbnailView.layer.borderColor = DesignTokens.Colors.inkPrimary.cgColor
-            backgroundColor = UIColor(hex: "f0f3ff")
-            layer?.cornerRadius = 12
+            backgroundColor = UIColor(hex: "f0f3ff")!
+            layer.cornerRadius = 12
         } else {
             thumbnailView.layer.borderWidth = 1
             thumbnailView.layer.borderColor = UIColor.systemGray5.cgColor
@@ -726,12 +726,12 @@ class LayerCardView: UIView {
     // MARK: - Actions
 
     @objc private func cardTapped() {
-        guard let layer = layer else { return }
+        guard let layer = layerData else { return }
         delegate?.layerCard(self, didSelectLayer: layer)
     }
 
     @objc private func cardLongPressed(_ gesture: UILongPressGestureRecognizer) {
-        guard let layer = layer else { return }
+        guard let layer = layerData else { return }
 
         switch gesture.state {
         case .began:
@@ -762,7 +762,7 @@ class LayerCardView: UIView {
     }
 
     @objc private func cardPanned(_ gesture: UIPanGestureRecognizer) {
-        guard let layer = layer else { return }
+        guard let layer = layerData else { return }
 
         switch gesture.state {
         case .began:
@@ -796,7 +796,7 @@ class LayerCardView: UIView {
     }
 
     @objc private func visibilityButtonTapped() {
-        guard let layer = layer else { return }
+        guard let layer = layerData else { return }
         delegate?.layerCard(self, didToggleVisibilityFor: layer)
 
         // Animate button

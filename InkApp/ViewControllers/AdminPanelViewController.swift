@@ -442,7 +442,7 @@ class AdminPanelViewController: UIViewController {
 
     private func createThemeBookRow(themeBook: ThemeBook) -> UIView {
         let container = UIView()
-        container.backgroundColor = UIColor(hex: themeBook.color).withAlphaComponent(0.1)
+        container.backgroundColor = UIColor(hex: themeBook.color)!.withAlphaComponent(0.1)
         container.layer.cornerRadius = 8
         container.heightAnchor.constraint(equalToConstant: 60).isActive = true
 

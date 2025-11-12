@@ -22,7 +22,7 @@ class EnhancedCanvasViewController: UIViewController {
     var floodFillEngine: FloodFillEngine?
     var layerManager: LayerManager!
     var brushEngine: EnhancedBrushEngine!
-    var undoManager: DrawingUndoManager!
+    var drawingUndoManager: DrawingUndoManager!
 
     // Canvas state
     var canvasSize: CGSize = CGSize(width: 2048, height: 2048)
@@ -36,7 +36,7 @@ class EnhancedCanvasViewController: UIViewController {
     private var brushButtons: [UIButton] = []
     private var selectedBrushIndex = 0
     private var debugLabel: UILabel?
-    private var layerSelectorView: LayerSelectorView!
+    var layerSelectorView: LayerSelectorView!
     private var brushPaletteView: UIView!
     private var advancedSettingsButton: UIButton!
     private var completeButton: UIButton!
@@ -51,8 +51,8 @@ class EnhancedCanvasViewController: UIViewController {
 
     // Completion tracking
     private var artworkStartTime: Date?
-    private var currentTemplate: Template?
-    private var artworkProgress: ArtworkProgress?
+    var currentTemplate: Template?
+    var artworkProgress: ArtworkProgress?
     private var progressLabel: UILabel?
 
     // MARK: - Lifecycle
@@ -101,7 +101,7 @@ class EnhancedCanvasViewController: UIViewController {
         brushEngine = EnhancedBrushEngine(configuration: config)
 
         // Initialize undo manager
-        undoManager = DrawingUndoManager(maxUndoLevels: 50)
+        drawingUndoManager = DrawingUndoManager(maxUndoLevels: 50)
     }
 
     private func setupMetalView() {
@@ -113,7 +113,8 @@ class EnhancedCanvasViewController: UIViewController {
         renderer = EnhancedMetalRenderer(metalView: metalView, layerManager: layerManager)
 
         // Initialize solid brush renderer (for brush/marker tools)
-        if let device = metalView.device, let commandQueue = renderer.commandQueue {
+        if let device = metalView.device {
+            let commandQueue = renderer.commandQueue
             solidBrushRenderer = SolidBrushRenderer(device: device, commandQueue: commandQueue)
             floodFillEngine = FloodFillEngine(device: device, commandQueue: commandQueue)
         }
@@ -258,7 +259,7 @@ class EnhancedCanvasViewController: UIViewController {
             }
 
             // Record for undo
-            undoManager.recordStroke(completedStroke)
+            drawingUndoManager.recordStroke(completedStroke)
         }
 
         isDrawing = false
@@ -589,28 +590,28 @@ class EnhancedCanvasViewController: UIViewController {
     }
 
     @objc private func undoButtonTapped() {
-        guard undoManager.canUndo() else {
+        guard drawingUndoManager.canUndo() else {
             showAlert("Nothing to undo", title: "Info")
             return
         }
 
         // For now, just show message
         // TODO: Implement actual undo rendering
-        _ = undoManager.undo()
+        _ = drawingUndoManager.undo()
         showAlert("Undo not yet fully implemented\nWill clear layer for now", title: "Undo")
         clearCurrentLayer()
 
-        print("⏮️ Undo (\(undoManager.undoCount()) remaining)")
+        print("⏮️ Undo (\(drawingUndoManager.undoCount()) remaining)")
     }
 
     @objc private func redoButtonTapped() {
-        guard undoManager.canRedo() else {
+        guard drawingUndoManager.canRedo() else {
             showAlert("Nothing to redo", title: "Info")
             return
         }
 
-        _ = undoManager.redo()
-        print("⏭️ Redo (\(undoManager.redoCount()) remaining)")
+        _ = drawingUndoManager.redo()
+        print("⏭️ Redo (\(drawingUndoManager.redoCount()) remaining)")
     }
 
     private func addCompleteButton() {
@@ -702,7 +703,7 @@ class EnhancedCanvasViewController: UIViewController {
         updateProgressLabel()
     }
 
-    private func updateProgressLabel() {
+    func updateProgressLabel() {
         guard let label = progressLabel else { return }
 
         if let progress = artworkProgress, let template = currentTemplate {
@@ -754,12 +755,7 @@ class EnhancedCanvasViewController: UIViewController {
     }
 
     // MARK: - Template Loading
-
-    func loadTemplate(_ template: Template) {
-        currentTemplate = template
-        artworkStartTime = Date()
-        print("📋 Loaded template: '\(template.name)'")
-    }
+    // loadTemplate is implemented in TemplateGalleryViewController.swift extension
 
     // MARK: - Completion & Export
 
@@ -848,7 +844,7 @@ class EnhancedCanvasViewController: UIViewController {
 
     // MARK: - Layer Selector
 
-    private func addLayerSelector() {
+    func addLayerSelector() {
         layerSelectorView = LayerSelectorView()
         layerSelectorView.delegate = self
         layerSelectorView.configure(

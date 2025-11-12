@@ -334,7 +334,7 @@ class FirebaseManager {
             return
         }
 
-        guard artwork.creatorID == currentUser?.id else {
+        guard artwork.userID == currentUser?.id else {
             completion(.failure(.permissionDenied))
             return
         }

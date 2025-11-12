@@ -411,7 +411,7 @@ extension EnhancedMetalRenderer: MTKViewDelegate {
         renderEncoder.endEncoding()
     }
 
-    private func compositeLayersForDisplay() -> MTLTexture? {
+    func compositeLayersForDisplay() -> MTLTexture? {
         guard let compositePipelineState = compositePipelineState,
               let commandBuffer = commandQueue.makeCommandBuffer() else {
             return canvasTexture

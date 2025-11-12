@@ -123,7 +123,7 @@ struct CompositeVertexOut {
 // Full-screen quad vertex shader for layer compositing
 vertex CompositeVertexOut composite_vertex(uint vertexID [[vertex_id]]) {
     // Full-screen quad vertices
-    constant float2 positions[6] = {
+    const float2 positions[6] = {
         float2(-1.0, -1.0),
         float2( 1.0, -1.0),
         float2(-1.0,  1.0),

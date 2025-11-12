@@ -409,14 +409,12 @@ class AIPatternAssistant {
             return [.contourHatching, .stippling, .waves]
         case .animals:
             return [.hatching, .stippling, .contourHatching]
-        case .geometric:
+        case .patterns:
             return [.crossHatching, .hatching]
         case .abstract:
             return [.mixed, .waves, .stippling]
-        case .mandalas:
+        case .landscapes:
             return [.stippling, .hatching, .crossHatching]
-        case .flowers:
-            return [.contourHatching, .stippling]
         }
     }
 
@@ -443,7 +441,6 @@ class AIPatternAssistant {
             case .beginner: return 0.7
             case .intermediate: return 1.0
             case .advanced: return 1.3
-            case .expert: return 1.6
             }
         }()
 

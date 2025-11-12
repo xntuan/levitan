@@ -1,0 +1,115 @@
+name: Ink
+options:
+  bundleIdPrefix: com.yourcompany
+  deploymentTarget:
+    iOS: "15.0"
+  developmentLanguage: Swift
+  xcodeVersion: "14.0"
+
+settings:
+  SWIFT_VERSION: "5.0"
+  MARKETING_VERSION: "1.0.0"
+  CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Ink:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    info:
+      path: InkApp/Supporting Files/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchStoryboardName: ""
+        UIRequiredDeviceCapabilities:
+          - armv7
+          - metal
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+    sources:
+      - path: InkApp/App
+      - path: InkApp/Models
+      - path: InkApp/ViewControllers
+      - path: InkApp/Views
+      - path: InkApp/Managers
+      - path: InkApp/Rendering
+      - path: InkApp/Utilities
+      - path: InkApp/Supporting Files
+        excludes:
+          - Info.plist
+    dependencies:
+      - sdk: Foundation.framework
+      - sdk: UIKit.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: CoreGraphics.framework
+      - sdk: QuartzCore.framework
+    settings:
+      base:
+        PRODUCT_NAME: Ink
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.ink
+        INFOPLIST_FILE: InkApp/Supporting Files/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ENABLE_BITCODE: NO
+        DEAD_CODE_STRIPPING: YES
+        CODE_SIGN_STYLE: Automatic
+      debug:
+        SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        METAL_VALIDATION: YES
+      release:
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+        METAL_VALIDATION: NO
+
+  InkTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - InkApp/Tests
+    dependencies:
+      - target: Ink
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.inkTests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Ink.app/Ink
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+
+schemes:
+  Ink:
+    build:
+      targets:
+        Ink: all
+        InkTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - InkTests
+    archive:
+      config: Release

@@ -456,11 +456,13 @@ class PhotoToPatternConverter {
         let template = Template(
             id: UUID(),
             name: "Converted from Photo",
-            category: .custom,
+            description: "Template created from photo conversion",
+            category: .patterns,
             difficulty: .intermediate,
-            thumbnailName: "",  // Will be generated
-            svgPath: "",  // Not used for photo conversions
-            estimatedTime: 30,
+            estimatedMinutes: 30,
+            thumbnailImageName: "",  // Will be generated
+            baseImageName: "",  // Not used for photo conversions
+            layerDefinitions: [],  // Will be populated separately
             primaryTechnique: .hatching
         )
 

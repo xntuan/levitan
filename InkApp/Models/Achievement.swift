@@ -54,7 +54,7 @@ struct Achievement: Codable, Identifiable, Hashable {
 
 // MARK: - Achievement Category
 
-enum AchievementCategory: String, Codable, CaseIterable {
+enum AchievementCategory: String, Codable, CaseIterable, Hashable {
     case technique = "Technique Mastery"
     case collection = "Collection Completion"
     case dedication = "Time & Dedication"
@@ -108,7 +108,7 @@ enum AchievementRequirement: Codable, Hashable {
 
 // MARK: - Achievement Reward
 
-struct AchievementReward: Codable {
+struct AchievementReward: Codable, Hashable {
     let templateUnlockIds: [UUID]
     let patternUnlocks: [String]  // Pattern names
     let title: String?  // Special title (e.g., "Master Stippler")

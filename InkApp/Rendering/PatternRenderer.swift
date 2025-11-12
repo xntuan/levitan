@@ -211,7 +211,7 @@ class PatternRenderer {
             )
 
             encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-            encoder.drawPrimitives(type: .triangleFan, vertexStart: 0, vertexCount: vertices.count)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: vertices.count)
         }
     }
 

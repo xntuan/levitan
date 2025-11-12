@@ -56,8 +56,8 @@ class TemplateGalleryViewController: UIViewController {
         let gradientLayer = CAGradientLayer()
         gradientLayer.frame = view.bounds
         gradientLayer.colors = [
-            UIColor(hex: "a8edea").cgColor,
-            UIColor(hex: "fed6e3").cgColor
+            UIColor(hex: "a8edea")!.cgColor,
+            UIColor(hex: "fed6e3")!.cgColor
         ]
         gradientLayer.locations = [0.0, 1.0]
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)
@@ -161,7 +161,7 @@ class TemplateGalleryViewController: UIViewController {
         gradientLayer.frame = CGRect(x: 0, y: 0, width: 260, height: 140)
         gradientLayer.cornerRadius = 16
 
-        let baseColor = UIColor(hex: themeBook.color)
+        let baseColor = UIColor(hex: themeBook.color)!
         let lighterColor = baseColor.lighter(by: 0.15) ?? baseColor
         let darkerColor = baseColor.darker(by: 0.15) ?? baseColor
 
@@ -636,8 +636,7 @@ extension EnhancedCanvasViewController {
         artworkProgress = ArtworkProgress(templateId: template.id)
 
         // 1. Clear existing layers
-        layerManager.layers.removeAll()
-        layerManager.activeLayerIndex = 0
+        layerManager.clearAllLayers()
         renderer.clearAllLayers()
 
         // 2. Load base image (optional - can be used as background reference)

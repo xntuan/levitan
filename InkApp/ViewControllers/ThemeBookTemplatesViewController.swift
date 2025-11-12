@@ -45,14 +45,14 @@ class ThemeBookTemplatesViewController: UIViewController {
 
     private func setupGradientBackground() {
         // Use theme book color for gradient
-        let baseColor = UIColor(hex: themeBook.color)
+        let baseColor = UIColor(hex: themeBook.color)!
         let lighterColor = baseColor.lighter(by: 0.2) ?? baseColor
 
         let gradientLayer = CAGradientLayer()
         gradientLayer.frame = view.bounds
         gradientLayer.colors = [
             lighterColor.cgColor,
-            UIColor(hex: "fed6e3").cgColor
+            UIColor(hex: "fed6e3")!.cgColor
         ]
         gradientLayer.locations = [0.0, 1.0]
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)

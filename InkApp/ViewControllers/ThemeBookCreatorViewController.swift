@@ -300,9 +300,7 @@ class ThemeBookCreatorViewController: UIViewController {
             templateIds: Array(selectedTemplateIds),
             order: order,
             isFeatured: featuredToggle.isOn,
-            isLocked: lockedToggle.isOn,
-            createdAt: Date(),
-            updatedAt: Date()
+            isLocked: lockedToggle.isOn
         )
 
         // Notify delegate

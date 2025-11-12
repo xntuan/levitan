@@ -41,8 +41,8 @@ class ThemeBookGalleryViewController: UIViewController {
         let gradientLayer = CAGradientLayer()
         gradientLayer.frame = view.bounds
         gradientLayer.colors = [
-            UIColor(hex: AppConfiguration.shared.galleryGradientStart).cgColor,
-            UIColor(hex: AppConfiguration.shared.galleryGradientEnd).cgColor
+            UIColor(hex: AppConfiguration.shared.galleryGradientStart)!.cgColor,
+            UIColor(hex: AppConfiguration.shared.galleryGradientEnd)!.cgColor
         ]
         gradientLayer.locations = [0.0, 1.0]
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)
@@ -359,7 +359,7 @@ class ThemeBookCollectionViewCell: UICollectionViewCell {
 
     func configure(with themeBook: ThemeBook) {
         // Gradient colors
-        let baseColor = UIColor(hex: themeBook.color)
+        let baseColor = UIColor(hex: themeBook.color)!
         let lighterColor = baseColor.lighter(by: 0.15) ?? baseColor
         let darkerColor = baseColor.darker(by: 0.15) ?? baseColor
 
