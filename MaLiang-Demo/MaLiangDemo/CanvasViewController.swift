@@ -31,20 +31,16 @@ class CanvasViewController: UIViewController {
         canvas.backgroundColor = .white
         view.addSubview(canvas)
 
-        // Create a basic brush
-        let texture = try? canvas.defaultBrush.makeTexture(size: 128)
-        brush = Brush(
-            name: "Default",
-            textureID: texture?.id,
-            target: canvas
-        )
-        brush.opacity = 1.0
+        // Register and use the default brush
+        brush = canvas.defaultBrush
+        brush.use()
+
+        // Customize brush properties
+        brush.opacity = 0.8
         brush.pointSize = 10
         brush.pointStep = 2
         brush.color = .black
-
-        // Set as current brush
-        canvas.currentBrush = brush
+        brush.forceSensitive = 0.5  // Pressure sensitivity
     }
 
     private func setupControls() {
