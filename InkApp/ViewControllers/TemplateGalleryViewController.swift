@@ -516,7 +516,7 @@ class TemplateGalleryViewController: UIViewController {
 
         // Create canvas view controller with template
         let canvasVC = EnhancedCanvasViewController()
-        canvasVC.loadTemplate(template)
+        canvasVC.currentTemplate = template  // Set template, will be loaded in viewDidLoad
         canvasVC.modalPresentationStyle = .fullScreen
 
         navigationController?.pushViewController(canvasVC, animated: true)

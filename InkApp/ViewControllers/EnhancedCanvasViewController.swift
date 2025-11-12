@@ -62,7 +62,14 @@ class EnhancedCanvasViewController: UIViewController {
         setupManagers()
         setupMetalView()
         setupGestures()
-        setupTestEnvironment()
+
+        // Load template if one was set before view loaded
+        if let template = currentTemplate {
+            loadTemplate(template)
+        } else {
+            // Setup test environment only if no template is set
+            setupTestEnvironment()
+        }
 
         // Start tracking artwork time
         artworkStartTime = Date()
