@@ -408,6 +408,7 @@
 				LastUpgradeCheck = 1400;
 				TargetAttributes = {
 					AD5572C833509F93411AFE87 = {
+						DevelopmentTeam = P23787K5H9;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -609,9 +610,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = P23787K5H9;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = "InkApp/Supporting Files/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -631,9 +633,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = P23787K5H9;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = "InkApp/Supporting Files/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;

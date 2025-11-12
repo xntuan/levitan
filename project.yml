@@ -77,6 +77,8 @@ targets:
         ENABLE_BITCODE: NO
         DEAD_CODE_STRIPPING: YES
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "P23787K5H9"
       debug:
         SWIFT_OPTIMIZATION_LEVEL: "-Onone"
         METAL_VALIDATION: YES
