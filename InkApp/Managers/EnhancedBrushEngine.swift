@@ -251,6 +251,12 @@ class EnhancedBrushEngine {
             smoothedPoints.append(contentsOf: stabilizationBuffer)
         }
 
+        // Update current stroke with final smoothed points
+        if var stroke = currentStroke {
+            stroke.points = smoothedPoints
+            currentStroke = stroke
+        }
+
         let completedStroke = currentStroke
         currentStroke = nil
 
@@ -374,8 +380,8 @@ class EnhancedBrushEngine {
         var stamps: [PatternStamp] = []
         guard stroke.points.count >= 2 else { return stamps }
 
-        // Use combined points (smoothed + predicted)
-        let allPoints = smoothedPoints + predictedPoints
+        // Use stroke's points (already smoothed and finalized)
+        let allPoints = stroke.points
 
         // Calculate spacing
         let baseSpacing = CGFloat(config.patternBrush.spacing)
@@ -512,8 +518,8 @@ class EnhancedBrushEngine {
             return stamps // Other tools don't use brush stamps
         }
 
-        // Use combined points (smoothed + predicted)
-        let allPoints = smoothedPoints + predictedPoints
+        // Use stroke's points (already smoothed and finalized)
+        let allPoints = stroke.points
 
         var distanceTraveled: CGFloat = 0
         var lastStampDistance: CGFloat = 0
