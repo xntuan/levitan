@@ -1130,6 +1130,14 @@ class EnhancedCanvasViewController: UIViewController {
             return
         }
 
+        // Check if touch is on a UI button - if so, don't start drawing
+        let touchLocation = touch.location(in: view)
+        if let hitView = view.hitTest(touchLocation, with: event),
+           hitView is UIButton || hitView is UIControl {
+            // Touch is on a button/control, don't start drawing
+            return
+        }
+
         if activeLayer.isLocked {
             showAlert("Layer '\(activeLayer.name)' is locked.\nUnlock it to draw.", title: "Layer Locked")
             print("⚠️ Layer '\(activeLayer.name)' is locked!")
